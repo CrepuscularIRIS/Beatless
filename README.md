@@ -14,6 +14,10 @@ This pack is designed as an engineering-ready Soul set, not roleplay content.
 ## Structure
 
 - `docs/00-system-matrix.md`: system matrix, switching path, risks, shared base suggestions
+- `docs/01-beatless-architecture-blueprint.md`: 完整架构蓝图（角色分工、状态机、长时任务策略）
+- `docs/02-skills-configuration-and-usage.md`: Skills 配置与调用手册（安装、同步、验证、故障）
+- `docs/03-test-and-acceptance-checklist.md`: 测试与验收清单（可直接按项执行）
+- `docs/04-parallelism-and-delivery-fallback.md`: 并行机制与飞书回执降级策略
 - `souls/001-kouka/SOUL.md`: siege mode (short-term blocker removal)
 - `souls/002-snowdrop/SOUL.md`: chaos mode (divergent branching only)
 - `souls/003-satonus/SOUL.md`: order mode (structure, governance, durability)
@@ -41,6 +45,32 @@ cp souls/005-lacia/SOUL.md ~/.openclaw/workspace/SOUL.md
 ```
 
 If you maintain multiple agents, assign each Soul to a dedicated agent workspace and route tasks by mode.
+
+## Beatless Runtime (Edict Replacement)
+
+This repo now includes an OpenClaw bootstrap script that provisions a full Beatless runtime:
+
+- Core roles: `lacia` (planner), `methode` (executor)
+- Mode labels (non-resident): `emergency` (Kouka strategy), `explore` (Snowdrop strategy), `review` (Satonus strategy)
+- Helper runtimes: `codex-builder`, `gemini-researcher`, `claude-architect`
+- Shared task ledger: `~/.openclaw/beatless/TASKS.yaml`
+- Feishu binding switched to `lacia`
+- Edict agent list disabled from active routing (config is backed up automatically)
+
+### One-command setup
+
+```bash
+bash /home/yarizakurahime/claw/Beatless/scripts/setup_openclaw_beatless.sh
+```
+
+### What the setup script does
+
+1. Backs up `~/.openclaw/openclaw.json`
+2. Creates/updates Beatless workspaces under `~/.openclaw/workspace-*`
+3. Installs role-specific `SOUL.md` + operational `AGENTS.md/HEARTBEAT.md/TOOLS.md`
+4. Installs common Claw skills into each Beatless workspace
+5. Replaces active `agents.list` with Beatless topology
+6. Rebinds Feishu ingress to `lacia`
 
 ## Current Source
 
