@@ -79,6 +79,26 @@ Result:
 - Router now reads YAML rules dynamically.
 - Search/repro lane priority set to Codex-first.
 
+### 7) Minimal controlled auto task discovery + scoring
+Runtime scripts:
+- `~/.openclaw/beatless/scripts/task_discovery_minimal.sh`
+- `~/.openclaw/beatless/scripts/task_value_score.sh`
+- integrated into `~/.openclaw/beatless/scripts/queue_cycle.sh`
+
+Behavior:
+- Discovery is guarded (small, deterministic, deduplicated).
+- Max new tasks per run is limited by policy (`max_new_per_run`, default `1`).
+- Scoring computes value score and reasons for backlog candidates.
+- Queue promotion now runs after discovery/scoring, with report fields:
+  - `discovery_status`
+  - `discovered_new_tasks`
+  - `scoring_status`
+
+Validation snapshot:
+- Discovery added a single controlled task (`BT-AUTO-20260318-R1`) under guard.
+- Scoring report generated (`task-value-score-latest.md`).
+- Quality gate remains PASS.
+
 ## Validation status
 
 Mandatory checks (latest):

@@ -32,3 +32,12 @@ Lacia，执行 Receipt-Replay-Smoke。
 2) 失败时进入 pending-delivery；
 3) 触发 replay 并回报 delivered 状态；
 4) 输出 DONE/DOING/BLOCKED/NEXT + VERDICT。
+
+## Prompt 4: Auto task discovery + scoring
+
+Lacia，执行 Task-Discovery-Scoring-Smoke。
+要求：
+1) 运行 task_discovery_minimal + task_value_score + queue_cycle；
+2) 回报本轮新增任务数（应受上限控制）；
+3) 回报 backlog top 候选及其 value_score；
+4) 输出 DONE/DOING/BLOCKED/NEXT + VERDICT，并落盘报告。
