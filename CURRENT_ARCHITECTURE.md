@@ -1,4 +1,4 @@
-# Beatless 当前架构说明（2026-03-18, V4）
+# Beatless 当前架构说明（2026-03-19, VNext）
 
 ## 1. 当前真实生效架构
 
@@ -34,10 +34,11 @@
 - Feishu 消息触发 `lacia`
 - cron 触发 `lacia`（START/CHECK/CLOSE/REPLAY）
 
-2. Lacia 读取顺序（强制）
-- `USER_SOUL.md`
-- `MEMORY.md`
-- `TASKS.yaml`
+2. Lacia 读取顺序（分层）
+- START/CLOSE：全读 `USER_SOUL.md + MEMORY.md + TASKS.yaml`
+- CHECK（常规）：轻读 `TASKS.yaml`
+- CHECK（review/blocked/escalation）：升级读取 `MEMORY.md`
+- CHECK（目标冲突/策略冲突）：再读取 `USER_SOUL.md`
 
 3. 任务推进
 - `ready -> in_progress`：进入执行
@@ -86,7 +87,8 @@
 
 ### 3.4 Kouka（emergency 模式）
 触发条件：
-- 任务标记 `mode=emergency`
+- 快速检索/截图/快速验证（默认 quick mode，300s）
+- 或任务标记 `mode=emergency`
 - 或出现关键阻塞（构建挂、服务挂、核心路径报错）
 
 动作：
@@ -102,9 +104,9 @@
 - 或需要方案探索、原型验证
 
 动作：
-- 允许试错与草案
-- 强制标注不确定项
-- 输出进入 review 再收敛
+- Phase-A：发散 3 个方向（假设、验证路径、失败信号）
+- Phase-B：强制并行双检索（`codex-builder` + `gemini-researcher`）
+- Phase-C：汇总结论；若冲突则 `needs_arbitration=true` 交 `satonus` 裁决
 
 说明：当前主要由模式标签触发；可按任务显式调度。
 
@@ -120,12 +122,13 @@
 触发方式：
 - 由 `lacia` 或 `methode` 在复杂任务时调用
 - 保持“主流程轻量，复杂问题升级专家”
+- `claude-generalist` 走“按任务能力路由”，不再依赖固定 Agency 激活短语
 
 ---
 
 ## 5. V4 已生效改动（运行态）
 
-- 协议抽取已生效：`~/.openclaw/beatless/protocols/{CORE,ROUTING,RECEIPT,FAILURE}.md`
+- 协议抽取已生效：`~/.openclaw/beatless/protocols/{CORE,ROUTING,RECEIPT,FAILURE,REBUTTAL}.md`
 - AGENTS 瘦身已生效：`workspace-lacia` 从 230 行降到 84 行，其他关键 agent 也已替换为短版
 - cron payload 瘦身已生效：`START/CHECK/CLOSE/REPLAY` 均为短文本策略触发
 - 队列漂移修复已生效：`queue_cycle.sh` 会同步 `queues.backlog` 与 `tasks[]`
