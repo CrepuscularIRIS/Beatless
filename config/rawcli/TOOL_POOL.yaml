@@ -1,0 +1,55 @@
+# TOOL_POOL.yaml — Raw CLI 工具池（单一真相来源）
+# 位置: ~/.openclaw/beatless/TOOL_POOL.yaml
+# 替代: acpx-config.json + MODEL_ROUTING.yaml 中的工具定义
+
+version: 1
+
+tools:
+  codex_cli:
+    command: "codex"
+    args: ["exec", "-m", "gpt-5.3-codex", "--skip-git-repo-check"]
+    prompt_mode: "positional"
+    native_model: "gpt-5.3-codex"
+    provider: "openai"
+    timeout_seconds: 1800
+    use_case: "开源检索/复杂代码/疑难debug/大规模重构"
+    notes: "搜索优先默认工具"
+
+  claude_opus_cli:
+    command: "claude"
+    args: ["--model", "claude-opus-4-20250514", "--permission-mode", "bypassPermissions"]
+    prompt_mode: "dash_p"
+    native_model: "claude-opus-4-20250514"
+    provider: "anthropic"
+    timeout_seconds: 1800
+    use_case: "架构边界/回滚策略/系统重构/高混乱裁决"
+    notes: "超时回退到 claude_sonnet_cli"
+
+  claude_sonnet_cli:
+    command: "claude"
+    args: ["--model", "claude-sonnet-4-20250514", "--permission-mode", "bypassPermissions"]
+    prompt_mode: "dash_p"
+    native_model: "claude-sonnet-4-20250514"
+    provider: "anthropic"
+    timeout_seconds: 1800
+    use_case: "日常开发/前后端/API/bugfix/结构化构建"
+    notes: "替代旧 claude-generalist + claude-architect-sonnet"
+
+  gemini_cli:
+    command: "gemini"
+    args: ["--model", "gemini-3.1-pro", "--yolo"]
+    prompt_mode: "positional"
+    native_model: "gemini-3.1-pro"
+    provider: "google"
+    timeout_seconds: 900
+    use_case: "学术推理/定理证明/数学物理/第一性发散"
+    notes: "非搜索首选——codex_cli 先行"
+
+# 路由映射: owner_agent → executor_tool
+routing_defaults:
+  search_first: codex_cli
+  daily_dev: claude_sonnet_cli
+  academic: gemini_cli
+  architecture: claude_opus_cli
+  emergency_code: codex_cli
+  opus_timeout_fallback: claude_sonnet_cli

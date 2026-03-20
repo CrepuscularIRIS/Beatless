@@ -22,14 +22,18 @@ This report captures the current Beatless architecture state after the RawCli mi
 ### 3. Hook/Event Runtime
 - Dispatch runtime is event-driven (`dispatch-queue.jsonl` -> tmux hook -> per-task pane -> result JSON).
 - Hook loop is active under `beatless-v2` session and writing result artifacts.
+- Dead-pane cleanup and fallback execution are now enabled in hook dispatch.
 
 ### 4. End-to-End Runtime Evidence
 - Successful RawCli dispatch proof tasks:
   - `BT-RAWCLI2-CODEX-20260320-151143`
   - `BT-RAWCLI2-CLAUDE-20260320-151143`
+  - `BT-RAWCLI-SMOKE3-20260320-154701`
 - Both produced:
   - `dispatch-results/<task>.json` with `status=success`
   - `/home/yarizakurahime/claw/Report/<task>-cli-output.md`
+- Event metrics are now written to:
+  - `~/.openclaw/beatless/metrics/dispatch-events.jsonl`
 
 ### 5. Skills/Agents Readiness
 - Claude workflow plugins remain installed and enabled (high-frequency set intact).
@@ -42,6 +46,15 @@ This report captures the current Beatless architecture state after the RawCli mi
 - Synced implementation bundle copies in `openclaw/docs/beatless-v2-rawcli/IMPLEMENTATION_BUNDLE`.
 - Updated active memory terminology to RawCli naming (`codex_cli/claude_sonnet_cli/claude_opus_cli`).
 - Cleaned active TASKS wording for wrapper-name drift (without rewriting historical session keys).
+- Added runtime hardening scripts:
+  - `rawcli_supervisor.sh`, `rawcli_healthcheck.sh`
+- Added observability scripts:
+  - `rawcli_metrics_rollup.sh`, `rawcli_alert_check.sh`, `rawcli_monitor_snapshot.sh`
+- Added ingress ACK script:
+  - `rawcli_ingress_ack_submit.sh`
+- Added CI governance:
+  - `.github/workflows/rawcli-governance.yml`
+  - `scripts/ci/validate_rawcli_contracts.py`
 
 ## Gap to Ideal Shape
 
@@ -52,23 +65,22 @@ This report captures the current Beatless architecture state after the RawCli mi
 - Low drift memory/config docs: no legacy wrapper terms in active policy files.
 - Operational hardening: one-command bootstrap, health checks, and CI validation for routing/hook flow.
 
-### Estimated Distance (as of 2026-03-20)
-- Overall completion toward ideal shape: **~72%**
-- Remaining gap: **~28%**
+### Estimated Distance (as of 2026-03-20, post-hardening)
+- Overall completion toward ideal shape: **~88%**
+- Remaining gap: **~12%**
 
 Breakdown (estimation):
-- Architecture migration completeness: **85%** (major design shift completed)
-- Runtime reliability/hardening: **70%** (core works, still needs stricter guards)
-- Observability/diagnostics: **65%** (artifacts exist, dashboards/alerts missing)
-- Config/memory consistency: **68%** (active files mostly aligned, historical drift remains)
-- Automation/CI enforcement: **55%** (manual verification dominates)
+- Architecture migration completeness: **92%** (core design stabilized)
+- Runtime reliability/hardening: **86%** (self-healing + health checks in place)
+- Observability/diagnostics: **82%** (events/metrics/alerts landed; external paging pending)
+- Config/memory consistency: **80%** (active files aligned, historical data remains mixed)
+- Automation/CI enforcement: **84%** (contract checks in CI, replay tests still pending)
 
-## Priority Next Steps (to close the 28%)
-1. Add a dedicated RawCli health-check script that executes `codex/claude/gemini` probes and fails fast.
-2. Add CI checks for route contract (`owner_agent + executor_tool`) and prompt mode compatibility.
-3. Introduce dispatch result schema validation + failure classification (timeout/auth/cli-arg).
-4. Complete legacy naming cleanup in non-archival docs/tasks while preserving historical IDs.
-5. Standardize bootstrap/restart commands for `beatless-v2` tmux/hook lifecycle.
+## Priority Next Steps (to close the 12%)
+1. Add provider-specific failure subcodes and retry matrix binding.
+2. Add active notifier (Feishu/Telegram) for warning/critical alerts.
+3. Add fixture replay tests for queue->hook->result lifecycle in CI.
+4. Continue legacy naming cleanup in non-archival task history.
 
 ## Conclusion
-RawCli architecture is now functionally real and validated in production-like flow. The largest remaining work is operational hardening and consistency cleanup, not core architecture redesign.
+RawCli architecture is now operationally hardened and CI-governed. Remaining work is mainly alert routing depth and automated replay testing rather than architecture-level redesign.
