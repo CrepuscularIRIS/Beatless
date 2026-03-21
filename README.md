@@ -33,3 +33,4 @@ Archived legacy docs are moved to `docs/_archived/`.
 ## Current Status
 
 See [CURRENT_ARCHITECTURE.md](./CURRENT_ARCHITECTURE.md) and [TODO.md](./TODO.md).
+DR closure mapping is tracked in [docs/13-dr-closure-status-20260321.md](./docs/13-dr-closure-status-20260321.md).

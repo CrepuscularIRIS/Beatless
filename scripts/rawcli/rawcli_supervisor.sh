@@ -15,9 +15,14 @@ DAYTIME_HEARTBEAT_END_HOUR="${DAYTIME_HEARTBEAT_END_HOUR:-23}"
 DAYTIME_HEARTBEAT_INTERVAL_MIN="${DAYTIME_HEARTBEAT_INTERVAL_MIN:-30}"
 DAYTIME_HEARTBEAT_SEND_ENABLED="${DAYTIME_HEARTBEAT_SEND_ENABLED:-true}"
 DAYTIME_HEARTBEAT_CHAT_ID="${DAYTIME_HEARTBEAT_CHAT_ID:-${FEISHU_TARGET_CHAT_ID:-}}"
+HOOK_LAG_THRESHOLD_MS="${HOOK_LAG_THRESHOLD_MS:-30000}"
 DAYTIME_SLOT_FILE="$BEATLESS/metrics/daytime-heartbeat-slot.txt"
 DAYTIME_MORNING_FILE="$BEATLESS/metrics/daytime-heartbeat-morning.txt"
 DAYTIME_CLOSING_FILE="$BEATLESS/metrics/daytime-heartbeat-closing.txt"
+RESTART_HISTORY_FILE="$BEATLESS/metrics/supervisor-restart-history.jsonl"
+AUTOMATION_TICK_ENABLED="${AUTOMATION_TICK_ENABLED:-true}"
+AUTOMATION_TICK_INTERVAL_SEC="${AUTOMATION_TICK_INTERVAL_SEC:-1800}"
+AUTOMATION_TICK_STAMP_FILE="$BEATLESS/metrics/automation-tick-last-epoch.txt"
 
 mkdir -p "$BEATLESS/logs" "$BEATLESS/metrics"
 
@@ -66,6 +71,28 @@ reconcile_stuck_results() {
   if ! bash "$SCRIPTS/rawcli_reconcile_stuck_results.sh" >/dev/null 2>&1; then
     log "stuck-result reconcile failed"
   fi
+}
+
+read_queue_lag_p95_ms() {
+  python3 - "$BEATLESS/metrics/rawcli-metrics-latest.json" <<'PY'
+import json, pathlib, sys
+p = pathlib.Path(sys.argv[1])
+if not p.exists():
+    print(0)
+    raise SystemExit(0)
+try:
+    d = json.loads(p.read_text(encoding='utf-8'))
+except Exception:
+    print(0)
+    raise SystemExit(0)
+print(int(float(d.get('queue_lag_ms_p95', 0.0) or 0.0)))
+PY
+}
+
+record_restart() {
+  local reason="$1"
+  printf '{"ts":"%s","session":"%s","reason":"%s","parallel":%s}\n' \
+    "$(date -Iseconds)" "$SESSION" "$reason" "$ACTIVE_PARALLEL" >> "$RESTART_HISTORY_FILE"
 }
 
 read_queue_depth_metric() {
@@ -147,6 +174,33 @@ emit_daytime_heartbeat_if_due() {
   fi
 }
 
+run_automation_tick_if_due() {
+  if [[ "$AUTOMATION_TICK_ENABLED" != "true" ]]; then
+    return
+  fi
+  if ! [[ "$AUTOMATION_TICK_INTERVAL_SEC" =~ ^[0-9]+$ ]] || [[ "$AUTOMATION_TICK_INTERVAL_SEC" -lt 60 ]]; then
+    AUTOMATION_TICK_INTERVAL_SEC=1800
+  fi
+  if [[ ! -x "$SCRIPTS/rawcli_cron_tick.sh" ]]; then
+    return
+  fi
+
+  local now last elapsed
+  now="$(date +%s)"
+  last="$(cat "$AUTOMATION_TICK_STAMP_FILE" 2>/dev/null || echo 0)"
+  if ! [[ "$last" =~ ^[0-9]+$ ]]; then
+    last=0
+  fi
+  elapsed=$((now - last))
+  if [[ "$elapsed" -lt "$AUTOMATION_TICK_INTERVAL_SEC" ]]; then
+    return
+  fi
+
+  echo "$now" > "$AUTOMATION_TICK_STAMP_FILE"
+  nohup bash "$SCRIPTS/rawcli_cron_tick.sh" >/dev/null 2>&1 < /dev/null &
+  log "automation_tick triggered (elapsed=${elapsed}s)"
+}
+
 fails=0
 log "supervisor started session=$SESSION interval=${INTERVAL_SEC}s max_fails=$MAX_FAILS"
 
@@ -187,8 +241,16 @@ while true; do
 
   if [ "$fails" -ge "$MAX_FAILS" ]; then
     log "healthcheck threshold exceeded -> restarting hooks"
+    record_restart "healthcheck_threshold_exceeded"
     restart_hooks
     fails=0
+  fi
+
+  queue_lag_p95="$(read_queue_lag_p95_ms)"
+  if [[ "$queue_lag_p95" -gt "$HOOK_LAG_THRESHOLD_MS" ]]; then
+    log "queue_lag_p95=${queue_lag_p95}ms exceeds ${HOOK_LAG_THRESHOLD_MS}ms -> restarting hooks"
+    record_restart "queue_lag_exceeded"
+    restart_hooks
   fi
 
   if SESSION_NAME="$SESSION" bash "$SCRIPTS/rawcli_alert_check.sh" >/dev/null 2>&1; then
@@ -197,6 +259,11 @@ while true; do
     log "alert check returned non-zero (warning/critical), see Report/rawcli-alert-latest.md"
   fi
 
+  if [[ -x "$SCRIPTS/rawcli_observability_panel.sh" ]]; then
+    bash "$SCRIPTS/rawcli_observability_panel.sh" >/dev/null 2>&1 || log "observability panel refresh failed"
+  fi
+
+  run_automation_tick_if_due
   emit_daytime_heartbeat_if_due
 
   printf '{"ts":"%s","session":"%s","interval_sec":%s,"health_fail_streak":%s}\n' \

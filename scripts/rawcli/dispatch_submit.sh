@@ -3,15 +3,17 @@ set -euo pipefail
 
 # dispatch_submit.sh
 # Usage:
-#   dispatch_submit.sh TASK_ID OWNER_AGENT EXECUTOR_TOOL PROMPT [TIMEOUT_OVERRIDE] [EXPECT_REGEX] [EXPECT_EXACT_LINE] [MODEL_OVERRIDE] [RUN_ID] [PHASE]
+#   dispatch_submit.sh TASK_ID OWNER_AGENT EXECUTOR_TOOL PROMPT [TIMEOUT_OVERRIDE] [EXPECT_REGEX] [EXPECT_EXACT_LINE] [MODEL_OVERRIDE] [RUN_ID] [PHASE] [TRACE_ID]
 # Env:
 #   RUN_ID=<run_id>   # optional; used when arg9 is omitted
+#   TRACE_ID=<trace_id> # optional; used when arg11 is omitted
 
 BEATLESS="${HOME}/.openclaw/beatless"
 QUEUE="$BEATLESS/dispatch-queue.jsonl"
+SUBMIT_EVENTS="$BEATLESS/metrics/dispatch-submit-events.jsonl"
 
 if [[ $# -lt 4 ]]; then
-  echo "Usage: $0 TASK_ID OWNER_AGENT EXECUTOR_TOOL PROMPT [TIMEOUT_OVERRIDE] [EXPECT_REGEX] [EXPECT_EXACT_LINE] [MODEL_OVERRIDE] [RUN_ID] [PHASE]" >&2
+  echo "Usage: $0 TASK_ID OWNER_AGENT EXECUTOR_TOOL PROMPT [TIMEOUT_OVERRIDE] [EXPECT_REGEX] [EXPECT_EXACT_LINE] [MODEL_OVERRIDE] [RUN_ID] [PHASE] [TRACE_ID]" >&2
   exit 2
 fi
 
@@ -25,6 +27,7 @@ EXPECT_EXACT_LINE="${7:-}"
 MODEL_OVERRIDE="${8:-}"
 RUN_ID="${9:-${RUN_ID:-}}"
 PHASE="${10:-}"
+TRACE_ID="${11:-${TRACE_ID:-}}"
 
 case "$OWNER_AGENT" in
   lacia|kouka|methode|satonus|snowdrop) ;;
@@ -52,10 +55,18 @@ if [[ -n "$PHASE" ]] && ! [[ "$PHASE" =~ ^[A-Za-z0-9][A-Za-z0-9._:-]{0,63}$ ]]; 
   exit 2
 fi
 
-mkdir -p "$BEATLESS/dispatch-results" "$BEATLESS/logs"
+if [[ -z "$TRACE_ID" ]]; then
+  TRACE_ID="trace-${TASK_ID}-$(date +%s)"
+fi
+if ! [[ "$TRACE_ID" =~ ^[A-Za-z0-9][A-Za-z0-9._:-]{3,255}$ ]]; then
+  echo "invalid trace_id: $TRACE_ID" >&2
+  exit 2
+fi
+
+mkdir -p "$BEATLESS/dispatch-results" "$BEATLESS/logs" "$BEATLESS/metrics"
 touch "$QUEUE"
 
-python3 - "$TASK_ID" "$OWNER_AGENT" "$EXECUTOR_TOOL" "$PROMPT" "$TIMEOUT_OVERRIDE" "$EXPECT_REGEX" "$EXPECT_EXACT_LINE" "$MODEL_OVERRIDE" "$RUN_ID" "$PHASE" >> "$QUEUE" <<'PY'
+python3 - "$TASK_ID" "$OWNER_AGENT" "$EXECUTOR_TOOL" "$PROMPT" "$TIMEOUT_OVERRIDE" "$EXPECT_REGEX" "$EXPECT_EXACT_LINE" "$MODEL_OVERRIDE" "$RUN_ID" "$PHASE" "$TRACE_ID" >> "$QUEUE" <<'PY'
 import json,sys
 obj = {
   "task_id": sys.argv[1],
@@ -63,6 +74,7 @@ obj = {
   "executor_tool": sys.argv[3],
   "prompt": sys.argv[4],
   "timeout_override": int(sys.argv[5]) if sys.argv[5].isdigit() else None,
+  "submitted_at": __import__("datetime").datetime.now().astimezone().isoformat(),
 }
 if sys.argv[6]:
   obj["expect_regex"] = sys.argv[6]
@@ -74,11 +86,16 @@ if sys.argv[9]:
   obj["run_id"] = sys.argv[9]
 if sys.argv[10]:
   obj["phase"] = sys.argv[10]
+if sys.argv[11]:
+  obj["trace_id"] = sys.argv[11]
 print(json.dumps(obj, ensure_ascii=False))
 PY
 
+printf '{"ts":"%s","task_id":"%s","owner_agent":"%s","executor_tool":"%s","run_id":"%s","phase":"%s","trace_id":"%s"}\n' \
+  "$(date -Iseconds)" "$TASK_ID" "$OWNER_AGENT" "$EXECUTOR_TOOL" "$RUN_ID" "$PHASE" "$TRACE_ID" >> "$SUBMIT_EVENTS"
+
 if [[ -n "$RUN_ID" ]]; then
-  echo "queued: $TASK_ID -> $EXECUTOR_TOOL (run_id=$RUN_ID)"
+  echo "queued: $TASK_ID -> $EXECUTOR_TOOL (run_id=$RUN_ID trace_id=$TRACE_ID)"
 else
-  echo "queued: $TASK_ID -> $EXECUTOR_TOOL"
+  echo "queued: $TASK_ID -> $EXECUTOR_TOOL (trace_id=$TRACE_ID)"
 fi

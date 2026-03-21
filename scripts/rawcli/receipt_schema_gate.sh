@@ -5,33 +5,34 @@ set -euo pipefail
 # Validate final user-facing receipt format before delivery.
 #
 # Usage:
-#   receipt_schema_gate.sh TASK_ID RECEIPT_FILE [RUN_ID]
+#   receipt_schema_gate.sh TASK_ID RECEIPT_FILE [RUN_ID] [TRACE_ID]
 
 BEATLESS="${HOME}/.openclaw/beatless"
 EVENTS_FILE="$BEATLESS/metrics/receipt-gate-events.jsonl"
 
-if [[ $# -lt 2 || $# -gt 3 ]]; then
-  echo "Usage: $0 TASK_ID RECEIPT_FILE [RUN_ID]" >&2
+if [[ $# -lt 2 || $# -gt 4 ]]; then
+  echo "Usage: $0 TASK_ID RECEIPT_FILE [RUN_ID] [TRACE_ID]" >&2
   exit 2
 fi
 
 TASK_ID="$1"
 RECEIPT_FILE="$2"
 RUN_ID="${3:-}"
+TRACE_ID="${4:-${TRACE_ID:-}}"
 
 mkdir -p "$BEATLESS/metrics"
 
 fail() {
   local reason="$1"
-  printf '{"ts":"%s","task_id":"%s","status":"fail","reason":"%s","receipt_file":"%s"}\n' \
-    "$(date -Iseconds)" "$TASK_ID" "$reason" "$RECEIPT_FILE" >> "$EVENTS_FILE"
+  printf '{"ts":"%s","task_id":"%s","trace_id":"%s","status":"fail","reason":"%s","receipt_file":"%s"}\n' \
+    "$(date -Iseconds)" "$TASK_ID" "$TRACE_ID" "$reason" "$RECEIPT_FILE" >> "$EVENTS_FILE"
   echo "RECEIPT_SCHEMA_FAIL task_id=$TASK_ID reason=$reason"
   exit 1
 }
 
 pass() {
-  printf '{"ts":"%s","task_id":"%s","status":"pass","receipt_file":"%s"}\n' \
-    "$(date -Iseconds)" "$TASK_ID" "$RECEIPT_FILE" >> "$EVENTS_FILE"
+  printf '{"ts":"%s","task_id":"%s","trace_id":"%s","status":"pass","receipt_file":"%s"}\n' \
+    "$(date -Iseconds)" "$TASK_ID" "$TRACE_ID" "$RECEIPT_FILE" >> "$EVENTS_FILE"
   echo "RECEIPT_SCHEMA_PASS task_id=$TASK_ID"
 }
 
@@ -53,6 +54,10 @@ fi
 grep -Eq '^VERDICT:[[:space:]]*(PASS|FAIL|PARTIAL)$' "$RECEIPT_FILE" || fail "verdict_missing_or_invalid"
 grep -Eq '^DONE:[[:space:]]*$' "$RECEIPT_FILE" || fail "done_section_missing"
 grep -Eq '^(证据|evidence_path|dispatch_result_path|cli_output_path|evidence_root):' "$RECEIPT_FILE" || fail "evidence_field_missing"
+
+if [[ -z "$TRACE_ID" ]]; then
+  TRACE_ID="$(awk -F':' '/^trace_id:[[:space:]]*/ {sub(/^[[:space:]]+/, "", $2); print $2; exit}' "$RECEIPT_FILE" || true)"
+fi
 
 if grep -Eiq '(Conversation info|message_id|sender_id|我需要|让我|用户要求|翻译反馈|正在执行)' "$RECEIPT_FILE"; then
   fail "debug_or_internal_text_detected"

@@ -171,7 +171,7 @@ PY
 
 process_line() {
   local line="$1"
-  local task_id tool_id prompt timeout_override expect_regex expect_exact_line model_override run_id phase
+  local task_id tool_id prompt timeout_override expect_regex expect_exact_line model_override run_id phase trace_id submitted_at
   local requested_tool_id budget_gate budget_result
 
   if ! echo "$line" | python3 -c "import json,sys; d=json.load(sys.stdin); assert 'task_id' in d and 'executor_tool' in d and 'prompt' in d" >/dev/null 2>&1; then
@@ -188,18 +188,23 @@ process_line() {
   model_override=$(echo "$line" | python3 -c "import json,sys; print((json.load(sys.stdin).get('model_override') or ''))")
   run_id=$(echo "$line" | python3 -c "import json,sys; print((json.load(sys.stdin).get('run_id') or ''))")
   phase=$(echo "$line" | python3 -c "import json,sys; print((json.load(sys.stdin).get('phase') or ''))")
+  trace_id=$(echo "$line" | python3 -c "import json,sys; print((json.load(sys.stdin).get('trace_id') or ''))")
+  submitted_at=$(echo "$line" | python3 -c "import json,sys; print((json.load(sys.stdin).get('submitted_at') or ''))")
+  if [[ -z "$trace_id" ]]; then
+    trace_id="trace-${task_id}"
+  fi
 
   if [[ -n "$run_id" ]] && [[ "$task_id" != "$run_id" && "$task_id" != "$run_id"-* ]]; then
     log "ERROR: run_id mismatch for $task_id (run_id=$run_id)"
-    echo "{\"task_id\":\"$task_id\",\"run_id\":\"$run_id\",\"phase\":\"$phase\",\"status\":\"failed\",\"error\":\"run_id_mismatch\",\"failure_type\":\"run_id_mismatch\",\"finished_at\":\"$(date -Iseconds)\"}" > "$RESULTS/$task_id.json"
-    printf '{"ts":"%s","task_id":"%s","run_id":"%s","phase":"%s","tool":"%s","status":"failed","exit_code":2,"failure_type":"run_id_mismatch"}\n' "$(date -Iseconds)" "$task_id" "$run_id" "$phase" "$tool_id" >> "$EVENTS_FILE"
+    echo "{\"task_id\":\"$task_id\",\"trace_id\":\"$trace_id\",\"run_id\":\"$run_id\",\"phase\":\"$phase\",\"status\":\"failed\",\"error\":\"run_id_mismatch\",\"failure_type\":\"run_id_mismatch\",\"finished_at\":\"$(date -Iseconds)\"}" > "$RESULTS/$task_id.json"
+    printf '{"ts":"%s","task_id":"%s","trace_id":"%s","run_id":"%s","phase":"%s","tool":"%s","status":"failed","exit_code":2,"failure_type":"run_id_mismatch"}\n' "$(date -Iseconds)" "$task_id" "$trace_id" "$run_id" "$phase" "$tool_id" >> "$EVENTS_FILE"
     return
   fi
 
   if check_idempotent_success "$task_id" "$run_id" "$phase"; then
     log "SKIP (idempotent success): $task_id phase=${phase:-_}"
-    printf '{"ts":"%s","task_id":"%s","run_id":"%s","phase":"%s","tool":"%s","status":"skipped","reason":"idempotent_success"}\n' \
-      "$(date -Iseconds)" "$task_id" "$run_id" "$phase" "$tool_id" >> "$EVENTS_FILE"
+    printf '{"ts":"%s","task_id":"%s","trace_id":"%s","run_id":"%s","phase":"%s","tool":"%s","status":"skipped","reason":"idempotent_success"}\n' \
+      "$(date -Iseconds)" "$task_id" "$trace_id" "$run_id" "$phase" "$tool_id" >> "$EVENTS_FILE"
     return
   fi
 
@@ -223,8 +228,8 @@ process_line() {
   local cmd
   cmd=$(get_tool_cmd "$tool_id" 2>/dev/null) || {
     log "ERROR: unknown tool $tool_id for $task_id"
-    echo "{\"task_id\":\"$task_id\",\"run_id\":\"$run_id\",\"phase\":\"$phase\",\"status\":\"failed\",\"error\":\"unknown_tool: $tool_id\",\"finished_at\":\"$(date -Iseconds)\"}" > "$RESULTS/$task_id.json"
-    printf '{"ts":"%s","task_id":"%s","run_id":"%s","phase":"%s","tool":"%s","status":"failed","exit_code":127,"failure_type":"unknown_tool"}\n' "$(date -Iseconds)" "$task_id" "$run_id" "$phase" "$tool_id" >> "$EVENTS_FILE"
+    echo "{\"task_id\":\"$task_id\",\"trace_id\":\"$trace_id\",\"run_id\":\"$run_id\",\"phase\":\"$phase\",\"status\":\"failed\",\"error\":\"unknown_tool: $tool_id\",\"finished_at\":\"$(date -Iseconds)\"}" > "$RESULTS/$task_id.json"
+    printf '{"ts":"%s","task_id":"%s","trace_id":"%s","run_id":"%s","phase":"%s","tool":"%s","status":"failed","exit_code":127,"failure_type":"unknown_tool"}\n' "$(date -Iseconds)" "$task_id" "$trace_id" "$run_id" "$phase" "$tool_id" >> "$EVENTS_FILE"
     return
   }
   if [[ -n "$model_override" && "$tool_id" == claude_*_cli ]]; then
@@ -248,10 +253,10 @@ process_line() {
   expect_exact_line_b64="$(printf '%s' "$expect_exact_line" | base64 -w0)"
   prompt_b64="$(printf '%s' "$prompt" | base64 -w0)"
 
-  log "DISPATCH: $task_id -> $tool_id (phase=${phase:-_} timeout ${timeout_s}s)"
+  log "DISPATCH: $task_id -> $tool_id (trace_id=$trace_id phase=${phase:-_} timeout ${timeout_s}s)"
 
   # Write initial status
-  echo "{\"task_id\":\"$task_id\",\"run_id\":\"$run_id\",\"phase\":\"$phase\",\"status\":\"running\",\"tool\":\"$tool_id\",\"started_at\":\"$(date -Iseconds)\"}" > "$result_file"
+  echo "{\"task_id\":\"$task_id\",\"trace_id\":\"$trace_id\",\"run_id\":\"$run_id\",\"phase\":\"$phase\",\"status\":\"running\",\"tool\":\"$tool_id\",\"submitted_at\":\"$submitted_at\",\"started_at\":\"$(date -Iseconds)\"}" > "$result_file"
 
   # Create tmux pane and execute
   # Use a wrapper script to capture exit code properly
@@ -261,6 +266,7 @@ process_line() {
 set -euo pipefail
 cd /home/yarizakurahime/claw
 echo "# CLI Output: $task_id" > "$out_file"
+echo "trace_id: $trace_id" >> "$out_file"
 echo "tool: $tool_id" >> "$out_file"
 echo "phase: ${phase:-_}" >> "$out_file"
 echo "started: \$(date -Iseconds)" >> "$out_file"
@@ -412,6 +418,7 @@ import os
 from pathlib import Path
 
 task_id = "$task_id"
+trace_id = "$trace_id"
 run_id = "$run_id"
 phase = "$phase"
 tool_id = "$tool_id"
@@ -425,16 +432,46 @@ validation_error = os.environ.get("FINAL_VALIDATION_ERROR", "").strip()
 provider_error_code = os.environ.get("FINAL_PROVIDER_ERROR_CODE", "").strip()
 finished_at = os.environ.get("FINAL_FINISHED_AT", "")
 timeout_s = os.environ.get("FINAL_TIMEOUT_S", "")
+submitted_at = "$submitted_at"
+started_at = ""
+try:
+    started_at = json.loads(Path("$result_file").read_text(encoding="utf-8")).get("started_at", "")
+except Exception:
+    started_at = ""
+
+def parse_iso(v: str) -> float | None:
+    if not v:
+        return None
+    try:
+        if v.endswith("Z"):
+            v = v[:-1] + "+00:00"
+        return __import__("datetime").datetime.fromisoformat(v).timestamp()
+    except Exception:
+        return None
+
+queue_lag_ms = 0
+st = parse_iso(started_at)
+sb = parse_iso(submitted_at)
+if st is not None and sb is not None and st >= sb:
+    queue_lag_ms = int((st - sb) * 1000)
 
 result = {
     "task_id": task_id,
+    "trace_id": trace_id,
     "run_id": run_id,
     "phase": phase,
+    "executor_tool": tool_id,
+    "requested_executor_tool": "$requested_tool_id",
     "status": status,
     "exit_code": exit_code,
     "attempts": attempts,
     "retry_count": retry_count,
+    "duration_sec": duration_sec,
     "output_path": "$out_file",
+    "output_file": "$out_file",
+    "submitted_at": submitted_at,
+    "started_at": started_at,
+    "queue_lag_ms": queue_lag_ms,
     "finished_at": finished_at,
 }
 if failure_type:
@@ -449,12 +486,14 @@ if status == "timeout" and timeout_s:
 event = {
     "ts": finished_at,
     "task_id": task_id,
+    "trace_id": trace_id,
     "run_id": run_id,
     "phase": phase,
     "tool": tool_id,
     "status": status,
     "exit_code": exit_code,
     "duration_sec": duration_sec,
+    "queue_lag_ms": queue_lag_ms,
     "attempts": attempts,
     "retry_count": retry_count,
 }

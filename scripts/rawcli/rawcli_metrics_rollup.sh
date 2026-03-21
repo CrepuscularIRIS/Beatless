@@ -6,6 +6,7 @@ QUEUE="$BEATLESS/dispatch-queue.jsonl"
 RESULTS_DIR="$BEATLESS/dispatch-results"
 EVENTS_FILE="$BEATLESS/metrics/dispatch-events.jsonl"
 GATE_EVENTS_FILE="$BEATLESS/metrics/receipt-gate-events.jsonl"
+INGRESS_EVENTS_FILE="$BEATLESS/metrics/ingress-events.jsonl"
 METRICS_DIR="$BEATLESS/metrics"
 REPORT_DIR="/home/yarizakurahime/claw/Report"
 OUT_JSON="$METRICS_DIR/rawcli-metrics-latest.json"
@@ -16,7 +17,7 @@ WINDOW_MINUTES="${1:-15}"
 mkdir -p "$METRICS_DIR" "$REPORT_DIR" "$RESULTS_DIR"
 touch "$QUEUE"
 
-python3 - "$QUEUE" "$RESULTS_DIR" "$EVENTS_FILE" "$GATE_EVENTS_FILE" "$OUT_JSON" "$OUT_PROM" "$WINDOW_MINUTES" <<'PY'
+python3 - "$QUEUE" "$RESULTS_DIR" "$EVENTS_FILE" "$GATE_EVENTS_FILE" "$INGRESS_EVENTS_FILE" "$OUT_JSON" "$OUT_PROM" "$WINDOW_MINUTES" <<'PY'
 import json
 import pathlib
 import sys
@@ -27,9 +28,10 @@ queue_path = pathlib.Path(sys.argv[1])
 results_dir = pathlib.Path(sys.argv[2])
 events_path = pathlib.Path(sys.argv[3])
 gate_events_path = pathlib.Path(sys.argv[4])
-out_json = pathlib.Path(sys.argv[5])
-out_prom = pathlib.Path(sys.argv[6])
-window_minutes = max(int(sys.argv[7]), 1)
+ingress_events_path = pathlib.Path(sys.argv[5])
+out_json = pathlib.Path(sys.argv[6])
+out_prom = pathlib.Path(sys.argv[7])
+window_minutes = max(int(sys.argv[8]), 1)
 
 
 def parse_iso_ts(value: str | None) -> float | None:
@@ -87,6 +89,10 @@ if events_path.exists():
             if ftype:
                 failure_window[str(ftype)] += 1
 
+last_task_id = ""
+if all_events:
+    last_task_id = str(all_events[-1].get("task_id", "") or "")
+
 # Consecutive failure streak (from newest events, regardless of window)
 consecutive_failures = 0
 for ev in reversed(all_events):
@@ -113,6 +119,55 @@ window_failed = status_window.get("failed", 0)
 window_timeout = status_window.get("timeout", 0)
 window_done = window_success + window_failed + window_timeout
 window_fail_rate = (window_failed + window_timeout) / window_done if window_done > 0 else 0.0
+
+duration_samples = []
+queue_lag_samples = []
+for ev in events:
+    try:
+        if "duration_sec" in ev:
+            duration_samples.append(float(ev.get("duration_sec", 0) or 0))
+        if "queue_lag_ms" in ev:
+            queue_lag_samples.append(float(ev.get("queue_lag_ms", 0) or 0))
+    except Exception:
+        continue
+
+def avg(vals):
+    return (sum(vals) / len(vals)) if vals else 0.0
+
+def p95(vals):
+    if not vals:
+        return 0.0
+    s = sorted(vals)
+    idx = int(round(0.95 * (len(s)-1)))
+    return float(s[idx])
+
+dispatch_duration_sec_avg = avg(duration_samples)
+dispatch_duration_sec_p95 = p95(duration_samples)
+queue_lag_ms_avg = avg(queue_lag_samples)
+queue_lag_ms_p95 = p95(queue_lag_samples)
+
+ack_latency_samples = []
+if ingress_events_path.exists():
+    for raw in ingress_events_path.read_text(encoding="utf-8", errors="ignore").splitlines():
+        line = raw.strip()
+        if not line:
+            continue
+        try:
+            obj = json.loads(line)
+        except Exception:
+            continue
+        ts = parse_iso_ts(obj.get("ts"))
+        if ts is None or ts < cutoff:
+            continue
+        if obj.get("event") != "ingress_complete":
+            continue
+        try:
+            ack_latency_samples.append(float(obj.get("ack_latency_ms", 0) or 0))
+        except Exception:
+            pass
+
+ack_latency_ms_avg = avg(ack_latency_samples)
+ack_latency_ms_p95 = p95(ack_latency_samples)
 
 # Receipt pass rate (last 15 gate events)
 receipt_pass_rate = 1.0
@@ -180,9 +235,16 @@ payload = {
         "timeout_count": int(window_timeout),
         "fail_rate": window_fail_rate,
         "consecutive_failures": consecutive_failures,
+        "last_task_id": last_task_id,
     },
     "receipt_pass_rate": receipt_pass_rate,
     "queue_saturation_pct": queue_saturation_pct,
+    "ack_latency_ms_avg": ack_latency_ms_avg,
+    "ack_latency_ms_p95": ack_latency_ms_p95,
+    "dispatch_duration_sec_avg": dispatch_duration_sec_avg,
+    "dispatch_duration_sec_p95": dispatch_duration_sec_p95,
+    "queue_lag_ms_avg": queue_lag_ms_avg,
+    "queue_lag_ms_p95": queue_lag_ms_p95,
     "mode": current_mode,
     "context_tokens_per_task": context_tokens_per_task,
     "anthropic_calls_today": {
@@ -215,6 +277,24 @@ prom_lines += [
     "# HELP rawcli_window_fail_rate Failure+timeout ratio in rolling window.",
     "# TYPE rawcli_window_fail_rate gauge",
     f"rawcli_window_fail_rate {window_fail_rate:.6f}",
+    "# HELP rawcli_ack_latency_ms_avg Average ingress ACK latency in ms.",
+    "# TYPE rawcli_ack_latency_ms_avg gauge",
+    f"rawcli_ack_latency_ms_avg {ack_latency_ms_avg:.3f}",
+    "# HELP rawcli_ack_latency_ms_p95 P95 ingress ACK latency in ms.",
+    "# TYPE rawcli_ack_latency_ms_p95 gauge",
+    f"rawcli_ack_latency_ms_p95 {ack_latency_ms_p95:.3f}",
+    "# HELP rawcli_dispatch_duration_sec_avg Average dispatch duration in seconds.",
+    "# TYPE rawcli_dispatch_duration_sec_avg gauge",
+    f"rawcli_dispatch_duration_sec_avg {dispatch_duration_sec_avg:.3f}",
+    "# HELP rawcli_dispatch_duration_sec_p95 P95 dispatch duration in seconds.",
+    "# TYPE rawcli_dispatch_duration_sec_p95 gauge",
+    f"rawcli_dispatch_duration_sec_p95 {dispatch_duration_sec_p95:.3f}",
+    "# HELP rawcli_queue_lag_ms_avg Average queue wait time in ms before execution.",
+    "# TYPE rawcli_queue_lag_ms_avg gauge",
+    f"rawcli_queue_lag_ms_avg {queue_lag_ms_avg:.3f}",
+    "# HELP rawcli_queue_lag_ms_p95 P95 queue wait time in ms before execution.",
+    "# TYPE rawcli_queue_lag_ms_p95 gauge",
+    f"rawcli_queue_lag_ms_p95 {queue_lag_ms_p95:.3f}",
     "# HELP rawcli_receipt_pass_rate Receipt schema gate pass rate (recent window).",
     "# TYPE rawcli_receipt_pass_rate gauge",
     f"rawcli_receipt_pass_rate {receipt_pass_rate:.6f}",
@@ -264,6 +344,12 @@ out.write_text(
         f"- window_consecutive_failures: {window.get('consecutive_failures', 0)}",
         f"- receipt_pass_rate: {d.get('receipt_pass_rate', 1.0):.3f}",
         f"- queue_saturation_pct: {d.get('queue_saturation_pct', 0.0):.1f}",
+        f"- ack_latency_ms_avg: {d.get('ack_latency_ms_avg', 0.0):.1f}",
+        f"- ack_latency_ms_p95: {d.get('ack_latency_ms_p95', 0.0):.1f}",
+        f"- dispatch_duration_sec_avg: {d.get('dispatch_duration_sec_avg', 0.0):.2f}",
+        f"- dispatch_duration_sec_p95: {d.get('dispatch_duration_sec_p95', 0.0):.2f}",
+        f"- queue_lag_ms_avg: {d.get('queue_lag_ms_avg', 0.0):.1f}",
+        f"- queue_lag_ms_p95: {d.get('queue_lag_ms_p95', 0.0):.1f}",
         f"- mode: {d.get('mode', 'daily')}",
         f"- anthropic_calls_today.opus: {((d.get('anthropic_calls_today') or {}).get('opus', 0))}",
         f"- anthropic_calls_today.sonnet: {((d.get('anthropic_calls_today') or {}).get('sonnet', 0))}",

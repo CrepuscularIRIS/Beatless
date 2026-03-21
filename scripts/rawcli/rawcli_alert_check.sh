@@ -7,6 +7,7 @@ METRICS_JSON="$BEATLESS/metrics/rawcli-metrics-latest.json"
 ALERTS_JSON="$BEATLESS/metrics/rawcli-alerts-latest.json"
 REPORT_MD="/home/yarizakurahime/claw/Report/rawcli-alert-latest.md"
 ALERT_LOG="$BEATLESS/logs/rawcli-alerts.log"
+ALERT_NOTIFY="$SCRIPTS/rawcli_alert_notify.sh"
 WINDOW_MINUTES="${ALERT_WINDOW_MINUTES:-15}"
 
 MIN_SAMPLE="${ALERT_MIN_SAMPLE:-6}"
@@ -80,6 +81,7 @@ payload = {
     'queue_depth': metrics.get('queue_depth'),
     'running_count': metrics.get('running_count'),
     'window_events_total': window_total,
+    'task_id': window.get('last_task_id', ''),
     'fail_rate': fail_rate,
     'status_counts': status,
     'failure_type_counts': failures,
@@ -116,6 +118,10 @@ p = pathlib.Path(sys.argv[1])
 print(json.loads(p.read_text(encoding='utf-8')).get('severity', 'ok'))
 PY
 )"
+
+if [[ -x "$ALERT_NOTIFY" ]]; then
+  "$ALERT_NOTIFY" "$ALERTS_JSON" >/dev/null 2>&1 || true
+fi
 
 if [ "$severity" = "critical" ]; then
   printf '[%s] severity=%s report=%s\n' "$(date -Iseconds)" "$severity" "$REPORT_MD" >> "$ALERT_LOG"

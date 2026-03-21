@@ -7,10 +7,12 @@ QUEUE="$BEATLESS/dispatch-queue.jsonl"
 RESULTS="$BEATLESS/dispatch-results"
 TOOL_POOL="$BEATLESS/TOOL_POOL.yaml"
 EVENTS="$BEATLESS/metrics/dispatch-events.jsonl"
+SUBMIT_EVENTS="$BEATLESS/metrics/dispatch-submit-events.jsonl"
 REPORT_DIR="/home/yarizakurahime/claw/Report"
 OUT_MD="$REPORT_DIR/rawcli-healthcheck-latest.md"
 OUT_JSON="$BEATLESS/metrics/healthcheck-latest.json"
 SESSION="${SESSION_NAME:-beatless-v2}"
+QUEUE_LAG_THRESHOLD_SEC="${QUEUE_LAG_THRESHOLD_SEC:-45}"
 
 mkdir -p "$REPORT_DIR" "$BEATLESS/metrics"
 
@@ -54,12 +56,17 @@ check_passwarn() {
 check_passfail "tool_pool_exists" test -f "$TOOL_POOL"
 check_passfail "queue_writable" bash -c "touch '$QUEUE' && test -w '$QUEUE'"
 check_passfail "results_dir_exists" test -d "$RESULTS"
+check_passfail "results_dir_writable" bash -c "mkdir -p '$RESULTS' && tmp='$RESULTS/.hc-write-$$'; echo ok > \"\$tmp\" && rm -f \"\$tmp\""
 check_passfail "route_task_exists" test -x "$SCRIPTS/route_task.sh"
 check_passfail "dispatch_submit_exists" test -x "$SCRIPTS/dispatch_submit.sh"
 check_passfail "dispatch_hook_exists" test -x "$SCRIPTS/dispatch_hook_loop.sh"
 check_passwarn "supervisor_exists" test -x "$SCRIPTS/rawcli_supervisor.sh"
 check_passwarn "alert_check_exists" test -x "$SCRIPTS/rawcli_alert_check.sh"
+check_passwarn "alert_notify_exists" test -x "$SCRIPTS/rawcli_alert_notify.sh"
 check_passwarn "metrics_rollup_exists" test -x "$SCRIPTS/rawcli_metrics_rollup.sh"
+check_passwarn "trace_lookup_exists" test -x "$SCRIPTS/rawcli_trace_lookup.sh"
+check_passwarn "observability_panel_exists" test -x "$SCRIPTS/rawcli_observability_panel.sh"
+check_passwarn "automation_tick_exists" test -x "$SCRIPTS/rawcli_cron_tick.sh"
 
 check_passfail "cli_codex_available" command -v codex
 check_passfail "cli_claude_available" command -v claude
@@ -70,7 +77,7 @@ import yaml, pathlib
 p = pathlib.Path('/home/yarizakurahime/.openclaw/beatless/TOOL_POOL.yaml')
 d = yaml.safe_load(p.read_text(encoding='utf-8')) or {}
 assert isinstance(d, dict)
-required = {'codex_cli','claude_sonnet_cli','claude_opus_cli','gemini_cli'}
+required = {'codex_cli','claude_generalist_cli','claude_architect_opus_cli','claude_architect_sonnet_cli','gemini_cli'}
 assert required.issubset((d.get('tools') or {}).keys())
 for _, tool in (d.get('tools') or {}).items():
     assert tool.get('prompt_mode') in {'positional','dash_p'}
@@ -99,6 +106,71 @@ check_passwarn "tmux_session_exists" tmux has-session -t "$SESSION"
 check_passwarn "hook_process_alive" bash -c "ps -eo cmd | rg -q 'dispatch_hook_loop.sh'"
 check_passwarn "events_file_present" test -f "$EVENTS"
 check_passwarn "events_file_nonempty" test -s "$EVENTS"
+check_passwarn "submit_events_file_present" test -f "$SUBMIT_EVENTS"
+check_passwarn "submit_events_nonempty" test -s "$SUBMIT_EVENTS"
+
+if python3 - "$SUBMIT_EVENTS" "$EVENTS" "$QUEUE_LAG_THRESHOLD_SEC" <<'PY' >/dev/null 2>&1
+import json, sys, pathlib, datetime
+submit_p = pathlib.Path(sys.argv[1])
+dispatch_p = pathlib.Path(sys.argv[2])
+threshold = int(sys.argv[3])
+if not submit_p.exists():
+    raise SystemExit(1)
+latest_submit = None
+for ln in submit_p.read_text(encoding='utf-8', errors='ignore').splitlines():
+    ln = ln.strip()
+    if not ln:
+        continue
+    try:
+        obj = json.loads(ln)
+    except Exception:
+        continue
+    latest_submit = obj
+if not latest_submit:
+    raise SystemExit(1)
+task_id = str(latest_submit.get("task_id", ""))
+if not task_id:
+    raise SystemExit(1)
+def parse_ts(v):
+    if not v:
+        return None
+    t = str(v)
+    if t.endswith("Z"):
+        t=t[:-1]+"+00:00"
+    try:
+        return datetime.datetime.fromisoformat(t)
+    except Exception:
+        return None
+submit_ts = parse_ts(latest_submit.get("ts"))
+if submit_ts is None:
+    raise SystemExit(1)
+if dispatch_p.exists():
+    for ln in reversed(dispatch_p.read_text(encoding='utf-8', errors='ignore').splitlines()):
+        ln = ln.strip()
+        if not ln:
+            continue
+        try:
+            obj = json.loads(ln)
+        except Exception:
+            continue
+        if str(obj.get("task_id", "")) == task_id:
+            raise SystemExit(0)
+now = datetime.datetime.now(submit_ts.tzinfo)
+lag = (now - submit_ts).total_seconds()
+if lag > threshold:
+    raise SystemExit(2)
+raise SystemExit(0)
+PY
+then
+  record "PASS" "queue_consumable_lag" "within_threshold"
+else
+  rc=$?
+  if [[ "$rc" -eq 2 ]]; then
+    record "FAIL" "queue_consumable_lag" "submit_without_dispatch_exceeds_threshold"
+  else
+    record "WARN" "queue_consumable_lag" "insufficient_signal"
+  fi
+fi
 
 queue_depth="$(awk 'NF && $0 !~ /^#/' "$QUEUE" 2>/dev/null | wc -l | tr -d ' ' || echo 0)"
 if [ "$queue_depth" -gt 500 ]; then
