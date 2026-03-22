@@ -109,11 +109,12 @@ check_passwarn "events_file_nonempty" test -s "$EVENTS"
 check_passwarn "submit_events_file_present" test -f "$SUBMIT_EVENTS"
 check_passwarn "submit_events_nonempty" test -s "$SUBMIT_EVENTS"
 
-if python3 - "$SUBMIT_EVENTS" "$EVENTS" "$QUEUE_LAG_THRESHOLD_SEC" <<'PY' >/dev/null 2>&1
+if python3 - "$SUBMIT_EVENTS" "$EVENTS" "$RESULTS" "$QUEUE_LAG_THRESHOLD_SEC" <<'PY' >/dev/null 2>&1
 import json, sys, pathlib, datetime
 submit_p = pathlib.Path(sys.argv[1])
 dispatch_p = pathlib.Path(sys.argv[2])
-threshold = int(sys.argv[3])
+results_dir = pathlib.Path(sys.argv[3])
+threshold = int(sys.argv[4])
 if not submit_p.exists():
     raise SystemExit(1)
 latest_submit = None
@@ -155,6 +156,18 @@ if dispatch_p.exists():
             continue
         if str(obj.get("task_id", "")) == task_id:
             raise SystemExit(0)
+
+# Treat existing result row as consumed, even if dispatch event is not yet written.
+result_file = results_dir / f"{task_id}.json"
+if result_file.exists():
+    try:
+        result = json.loads(result_file.read_text(encoding='utf-8'))
+        status = str(result.get("status", ""))
+    except Exception:
+        status = ""
+    if status in {"running", "success", "failed", "timeout", "skipped"}:
+        raise SystemExit(0)
+
 now = datetime.datetime.now(submit_ts.tzinfo)
 lag = (now - submit_ts).total_seconds()
 if lag > threshold:
