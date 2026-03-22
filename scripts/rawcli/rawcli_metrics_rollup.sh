@@ -52,11 +52,18 @@ now = datetime.now(timezone.utc)
 cutoff = now.timestamp() - window_minutes * 60
 
 queue_depth = 0
+queued_task_ids = []
 if queue_path.exists():
     for raw in queue_path.read_text(encoding="utf-8", errors="ignore").splitlines():
         line = raw.strip()
         if line and not line.startswith("#"):
-            queue_depth += 1
+            try:
+                row = json.loads(line)
+            except Exception:
+                continue
+            task_id = str(row.get("task_id", "") or "")
+            if task_id:
+                queued_task_ids.append(task_id)
 
 events = []
 all_events = []
@@ -104,15 +111,23 @@ for ev in reversed(all_events):
 
 result_status = Counter()
 running_count = 0
+result_by_task = {}
 for file in sorted(results_dir.glob("*.json")):
     try:
         data = json.loads(file.read_text(encoding="utf-8"))
     except Exception:
         continue
+    task_id = str(data.get("task_id", "") or file.stem)
     status = str(data.get("status", "unknown"))
+    result_by_task[task_id] = status
     result_status[status] += 1
     if status == "running":
         running_count += 1
+
+# Queue depth should reflect pending work, not historical queue file length.
+for task_id in queued_task_ids:
+    if task_id not in result_by_task:
+        queue_depth += 1
 
 window_success = status_window.get("success", 0)
 window_failed = status_window.get("failed", 0)

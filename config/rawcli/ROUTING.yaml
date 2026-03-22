@@ -6,7 +6,7 @@ version: 3
 
 routing_rules:
   - id: quick-response
-    pattern: "快速|查一下|看一下|截图|verify quickly|screenshot|check status|验证一下"
+    pattern: "快速|查一下|看一下|截图|截屏|verify quickly|screenshot|screen shot|check status|验证一下"
     owner_agent: kouka
     executor_tool: null
     priority: 120
@@ -26,6 +26,13 @@ routing_rules:
     owner_agent: methode
     executor_tool: codex_cli
     priority: 105
+    mode: daily
+
+  - id: blog-research-breakdown
+    pattern: "blog.*research|research.*blog|拆解.*md|md.*拆解|报告.*拆解|维护.*blog"
+    owner_agent: methode
+    executor_tool: codex_cli
+    priority: 102
     mode: daily
 
   - id: architecture

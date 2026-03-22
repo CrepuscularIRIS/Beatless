@@ -12,11 +12,20 @@ SCRIPTS="$BEATLESS/scripts"
 EVENT_PHRASES="$BEATLESS/templates/event-phrases.yaml"
 EVENT_SIGNAL="$SCRIPTS/event_signal_emit.sh"
 REPORT_ACK_DIR="/home/yarizakurahime/claw/Report/acks"
+REPORT_DIR="/home/yarizakurahime/claw/Report"
 INGRESS_EVENTS="$BEATLESS/metrics/ingress-events.jsonl"
+DISPATCH_EVENTS="$BEATLESS/metrics/dispatch-events.jsonl"
+RESULTS_DIR="$BEATLESS/dispatch-results"
 ACK_LEDGER="$BEATLESS/metrics/ack-sent-task-ids.txt"
 ACK_LEDGER_LOCK="$BEATLESS/metrics/ack-sent-task-ids.lock"
 ROUTER="$SCRIPTS/route_task.sh"
 DISPATCH_SUBMIT="$SCRIPTS/dispatch_submit.sh"
+CAPTURE_SCRIPT="/home/yarizakurahime/.openclaw/workspace-lacia/skills/visual-proof/scripts/capture_url.sh"
+CAPTURE_DEFAULT_URL="${CAPTURE_DEFAULT_URL:-https://example.com}"
+CAPTURE_BLOG_URL="${CAPTURE_BLOG_URL:-http://127.0.0.1:3000}"
+CAPTURE_BLOG_ALT_URL="${CAPTURE_BLOG_ALT_URL:-http://127.0.0.1:4321}"
+CAPTURE_AUTO_START_BLOG_DEV="${CAPTURE_AUTO_START_BLOG_DEV:-true}"
+BLOG_BOOT_PID=""
 INGRESS_PHRASE_ENABLED="${INGRESS_PHRASE_ENABLED:-true}"
 ACK_STDOUT_MODE="${ACK_STDOUT_MODE:-once}"
 START_MS="$(python3 - <<'PY'
@@ -44,8 +53,9 @@ if [[ -z "$TRACE_ID" ]]; then
   TRACE_ID="trace-${TASK_ID}-$(date +%s)"
 fi
 
-mkdir -p "$REPORT_ACK_DIR" "$BEATLESS/metrics" "$BEATLESS/logs"
+mkdir -p "$REPORT_ACK_DIR" "$REPORT_DIR" "$RESULTS_DIR" "$BEATLESS/metrics" "$BEATLESS/logs"
 touch "$ACK_LEDGER"
+touch "$DISPATCH_EVENTS"
 
 if [[ -z "$OWNER_AGENT" || -z "$EXECUTOR_TOOL" ]]; then
   ROUTE_OUT="$($ROUTER "$REQUEST_TEXT")"
@@ -70,15 +80,189 @@ ACK
 printf '{"ts":"%s","task_id":"%s","owner_agent":"%s","executor_tool":"%s","event":"ingress_ack"}\n' \
   "$ACK_TIME" "$TASK_ID" "${OWNER_AGENT:-}" "${EXECUTOR_TOOL:-}" >> "$INGRESS_EVENTS"
 
-if [[ -n "$EXECUTOR_TOOL" ]]; then
-  if [[ -n "$TIMEOUT_OVERRIDE" ]]; then
-    "$DISPATCH_SUBMIT" "$TASK_ID" "$OWNER_AGENT" "$EXECUTOR_TOOL" "$REQUEST_TEXT" "$TIMEOUT_OVERRIDE" "$EXPECT_REGEX" "$EXPECT_EXACT_LINE" "$MODEL_OVERRIDE" "" "" "$TRACE_ID" >/dev/null
-  else
-    "$DISPATCH_SUBMIT" "$TASK_ID" "$OWNER_AGENT" "$EXECUTOR_TOOL" "$REQUEST_TEXT" "" "$EXPECT_REGEX" "$EXPECT_EXACT_LINE" "$MODEL_OVERRIDE" "" "" "$TRACE_ID" >/dev/null
+is_screenshot_request() {
+  local normalized
+  normalized="$(printf '%s' "$REQUEST_TEXT" | tr '[:upper:]' '[:lower:]')"
+  [[ "$normalized" =~ (截图|截屏|screenshot|screen[[:space:]_-]*shot|screen[[:space:]_-]*capture) ]]
+}
+
+extract_first_url() {
+  python3 - "$REQUEST_TEXT" <<'PY'
+import re
+import sys
+text = sys.argv[1]
+m = re.search(r'https?://[^\s)]+', text, flags=re.IGNORECASE)
+print(m.group(0) if m else "")
+PY
+}
+
+infer_capture_url() {
+  local direct_url normalized
+  direct_url="$(extract_first_url)"
+  if [[ -n "$direct_url" ]]; then
+    echo "$direct_url"
+    return
   fi
-  QUEUE_STATE="queued"
-else
-  QUEUE_STATE="accepted_no_executor"
+
+  normalized="$(printf '%s' "$REQUEST_TEXT" | tr '[:upper:]' '[:lower:]')"
+  if [[ "$normalized" =~ (blog|前端|frontend|ui|页面) ]]; then
+    if curl -I -sSf --max-time 3 "$CAPTURE_BLOG_URL" >/dev/null 2>&1; then
+      echo "$CAPTURE_BLOG_URL"
+      return
+    fi
+    if curl -I -sSf --max-time 3 "$CAPTURE_BLOG_ALT_URL" >/dev/null 2>&1; then
+      echo "$CAPTURE_BLOG_ALT_URL"
+      return
+    fi
+    if [[ "$CAPTURE_AUTO_START_BLOG_DEV" == "true" && -f "/home/yarizakurahime/blog/package.json" ]] && command -v pnpm >/dev/null 2>&1; then
+      local dev_log dev_pid
+      dev_log="/tmp/${TASK_ID}-blog-dev.log"
+      (
+        cd /home/yarizakurahime/blog
+        nohup pnpm dev --host 127.0.0.1 --port 3000 >"$dev_log" 2>&1 &
+        echo $! >"/tmp/${TASK_ID}-blog-dev.pid"
+      ) || true
+      dev_pid="$(cat "/tmp/${TASK_ID}-blog-dev.pid" 2>/dev/null || true)"
+      if [[ -n "$dev_pid" ]]; then
+        for _ in $(seq 1 20); do
+          if curl -I -sSf --max-time 2 "$CAPTURE_BLOG_URL" >/dev/null 2>&1; then
+            BLOG_BOOT_PID="$dev_pid"
+            echo "$CAPTURE_BLOG_URL"
+            return
+          fi
+          sleep 1
+        done
+        kill "$dev_pid" >/dev/null 2>&1 || true
+      fi
+    fi
+    if [[ -f "/home/yarizakurahime/blog/dist/client/index.html" ]]; then
+      echo "file:///home/yarizakurahime/blog/dist/client/index.html"
+      return
+    fi
+  fi
+  echo "$CAPTURE_DEFAULT_URL"
+}
+
+run_screenshot_fastpath() {
+  local capture_url out_file result_file capture_png err_file status failure_type start_epoch end_epoch duration_sec
+  capture_url="$(infer_capture_url)"
+  out_file="$REPORT_DIR/${TASK_ID}-cli-output.md"
+  result_file="$RESULTS_DIR/${TASK_ID}.json"
+  err_file="/tmp/${TASK_ID}-capture.err"
+  start_epoch="$(date +%s)"
+  status="failed"
+  failure_type=""
+  capture_png=""
+
+  if [[ ! -x "$CAPTURE_SCRIPT" ]]; then
+    failure_type="capture_script_missing"
+  else
+    if capture_png="$(bash "$CAPTURE_SCRIPT" "$capture_url" "$TASK_ID" "blog-front" 2>"$err_file")"; then
+      status="success"
+    else
+      failure_type="capture_failed"
+    fi
+  fi
+
+  end_epoch="$(date +%s)"
+  duration_sec=$((end_epoch - start_epoch))
+  if [[ -n "$BLOG_BOOT_PID" ]]; then
+    kill "$BLOG_BOOT_PID" >/dev/null 2>&1 || true
+  fi
+
+  {
+    echo "# CLI Output: $TASK_ID"
+    echo "trace_id: $TRACE_ID"
+    echo "tool: local_capture"
+    echo "started: $(date -Iseconds -d "@$start_epoch")"
+    echo "---"
+    if [[ "$status" == "success" ]]; then
+      echo "screenshot_path: $capture_png"
+      echo "capture_url: $capture_url"
+    else
+      echo "capture_url: $capture_url"
+      echo "capture_error: ${failure_type:-unknown}"
+      [[ -s "$err_file" ]] && sed -n '1,30p' "$err_file"
+    fi
+    echo "---"
+    echo "exit_code: $([[ \"$status\" == \"success\" ]] && echo 0 || echo 1)"
+    echo "finished: $(date -Iseconds)"
+  } > "$out_file"
+
+  export RESULT_FILE="$result_file"
+  export EVENTS_FILE="$DISPATCH_EVENTS"
+  export TASK_ID
+  export TRACE_ID
+  export CAPTURE_STATUS="$status"
+  export CAPTURE_FAILURE="$failure_type"
+  export CAPTURE_OUT="$out_file"
+  export CAPTURE_STARTED="$(date -Iseconds -d "@$start_epoch")"
+  export CAPTURE_FINISHED="$(date -Iseconds)"
+  export CAPTURE_DURATION="$duration_sec"
+  export CAPTURE_URL="$capture_url"
+  python3 <<'PY'
+import json
+import os
+from pathlib import Path
+
+task_id = os.environ["TASK_ID"]
+trace_id = os.environ["TRACE_ID"]
+status = os.environ["CAPTURE_STATUS"]
+failure = os.environ.get("CAPTURE_FAILURE", "")
+result = {
+    "task_id": task_id,
+    "trace_id": trace_id,
+    "status": status,
+    "executor_tool": "local_capture",
+    "output_path": os.environ["CAPTURE_OUT"],
+    "started_at": os.environ["CAPTURE_STARTED"],
+    "finished_at": os.environ["CAPTURE_FINISHED"],
+    "duration_sec": int(os.environ.get("CAPTURE_DURATION", "0") or 0),
+}
+if failure:
+    result["failure_type"] = failure
+
+event = {
+    "ts": os.environ["CAPTURE_FINISHED"],
+    "task_id": task_id,
+    "trace_id": trace_id,
+    "tool": "local_capture",
+    "status": status,
+    "exit_code": 0 if status == "success" else 1,
+    "duration_sec": int(os.environ.get("CAPTURE_DURATION", "0") or 0),
+}
+if failure:
+    event["failure_type"] = failure
+
+Path(os.environ["RESULT_FILE"]).write_text(json.dumps(result, ensure_ascii=False), encoding="utf-8")
+with Path(os.environ["EVENTS_FILE"]).open("a", encoding="utf-8") as fh:
+    fh.write(json.dumps(event, ensure_ascii=False) + "\n")
+PY
+
+  [[ "$status" == "success" ]]
+}
+
+QUEUE_STATE="accepted_no_executor"
+FASTPATH_DONE="false"
+
+if is_screenshot_request && [[ "${INGRESS_DISABLE_CAPTURE_FASTPATH:-false}" != "true" ]]; then
+  OWNER_AGENT="${OWNER_AGENT:-kouka}"
+  if run_screenshot_fastpath; then
+    EXECUTOR_TOOL="local_capture"
+    QUEUE_STATE="captured_direct"
+    FASTPATH_DONE="true"
+  fi
+fi
+
+if [[ "$FASTPATH_DONE" != "true" ]]; then
+  if [[ -n "$EXECUTOR_TOOL" ]]; then
+    if [[ -n "$TIMEOUT_OVERRIDE" ]]; then
+      "$DISPATCH_SUBMIT" "$TASK_ID" "$OWNER_AGENT" "$EXECUTOR_TOOL" "$REQUEST_TEXT" "$TIMEOUT_OVERRIDE" "$EXPECT_REGEX" "$EXPECT_EXACT_LINE" "$MODEL_OVERRIDE" "" "" "$TRACE_ID" >/dev/null
+    else
+      "$DISPATCH_SUBMIT" "$TASK_ID" "$OWNER_AGENT" "$EXECUTOR_TOOL" "$REQUEST_TEXT" "" "$EXPECT_REGEX" "$EXPECT_EXACT_LINE" "$MODEL_OVERRIDE" "" "" "$TRACE_ID" >/dev/null
+    fi
+    QUEUE_STATE="queued"
+  fi
 fi
 
 maybe_emit_ingress_phrase() {
