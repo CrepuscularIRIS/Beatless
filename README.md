@@ -1,39 +1,28 @@
-# Beatless (RawCli V2)
+# Beatless (OpenClaw 5-MainAgent Baseline)
 
-Beatless is a RawCli-first orchestration profile for OpenClaw.
+This repository is reset to the new Beatless baseline aligned with the live OpenClaw runtime.
 
-## Architecture
+## Baseline Scope
+- 5 Main Agents: `lacia`, `methode`, `kouka`, `snowdrop`, `satonus`
+- Main model baseline: `stepfun/step-3.5-flash`
+- External lanes (via rawcli router plugin):
+  - `claude_architect_cli` (Opus 4.6)
+  - `claude_build_cli` (Kimi K2.5)
+  - `codex_review_cli` (GPT-5.3-Codex)
+  - `search_cli` (MiniMax M2.7)
+  - `gemini_research_cli` (Gemini 3.1 Pro Preview)
 
-- 5 core agents: `lacia`, `kouka`, `methode`, `satonus`, `snowdrop`
-- 4 executor tools: `codex_cli`, `claude_generalist_cli`, `claude_architect_opus_cli`, `gemini_cli`
-- Dispatch contract: `owner_agent + executor_tool`
-- Runtime chain: Feishu ingress -> ACK -> dispatch queue -> tmux hook -> result -> schema-gated receipt
+## Directory
+- `agents/<id>/` : exported workspace contracts (`AGENTS.md`, `SOUL.md`, `TOOLS.md`, etc.)
+- `config/openclaw.redacted.json` : runtime config snapshot with secrets removed
+- `config/cron.jobs.snapshot.json` : current cron automation snapshot
+- `config/agents.snapshot.json` : current agent list snapshot
+- `docs/` : acceptance and OpenRoom integration design
+- `scripts/validate_baseline.py` : CI validation
 
-## Key Properties
-
-- No wrapper-as-model ambiguity
-- Raw CLI direct execution
-- Fast ACK and evidence-backed final receipt
-- Event-layer phrase templates (not Soul pollution)
-
-## Repository Layout
-
-- `docs/`: architecture, routing, validation, runtime hardening
-- `souls/`: slim Soul definitions + AGENTS contracts for 5 core agents
-- `scripts/`: setup/bootstrap and operational scripts
-- `config/runtime/openclaw.runtime-overlay.redacted.json`: current runtime overlay snapshot (redacted)
-
-Archived legacy docs are moved to `docs/_archived/`.
-
-## Runtime Notes
-
-- Source-of-truth routing: `~/.openclaw/beatless/ROUTING.yaml`
-- Source-of-truth tools: `~/.openclaw/beatless/TOOL_POOL.yaml`
-- Event phrases: `~/.openclaw/beatless/templates/event-phrases.yaml`
-- Heartbeat cadence: busy `30m` / idle `60m` (noise-reduced)
-- Closing quiet-hours: after daily closing message, no further heartbeat chatter that night
-
-## Current Status
-
-See [CURRENT_ARCHITECTURE.md](./CURRENT_ARCHITECTURE.md) and [TODO.md](./TODO.md).
-DR closure mapping is tracked in [docs/13-dr-closure-status-20260321.md](./docs/13-dr-closure-status-20260321.md).
+## CI
+`beatless-baseline-validate` checks:
+1. all 5 agents exist
+2. key contract files exist
+3. redacted config is parseable and includes 5-agent list
+4. cron snapshot is parseable

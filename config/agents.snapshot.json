@@ -1,0 +1,60 @@
+[
+  {
+    "id": "lacia",
+    "name": "Lacia",
+    "identityName": "Lacia",
+    "identitySource": "identity",
+    "workspace": "/home/yarizakurahime/claw/.openclaw/workspace-lacia",
+    "agentDir": "/home/yarizakurahime/claw/.openclaw/agents/lacia/agent",
+    "model": "stepfun/step-3.5-flash",
+    "bindings": 1,
+    "isDefault": true,
+    "routes": [
+      "default (no explicit rules)"
+    ]
+  },
+  {
+    "id": "kouka",
+    "name": "Kouka",
+    "identityName": "Kouka",
+    "identitySource": "identity",
+    "workspace": "/home/yarizakurahime/claw/.openclaw/workspace-kouka",
+    "agentDir": "/home/yarizakurahime/claw/.openclaw/agents/kouka/agent",
+    "model": "stepfun/step-3.5-flash",
+    "bindings": 0,
+    "isDefault": false
+  },
+  {
+    "id": "methode",
+    "name": "Methode",
+    "identityName": "Methode",
+    "identitySource": "identity",
+    "workspace": "/home/yarizakurahime/claw/.openclaw/workspace-methode",
+    "agentDir": "/home/yarizakurahime/claw/.openclaw/agents/methode/agent",
+    "model": "stepfun/step-3.5-flash",
+    "bindings": 0,
+    "isDefault": false
+  },
+  {
+    "id": "satonus",
+    "name": "Satonus",
+    "identityName": "Satonus",
+    "identitySource": "identity",
+    "workspace": "/home/yarizakurahime/claw/.openclaw/workspace-satonus",
+    "agentDir": "/home/yarizakurahime/claw/.openclaw/agents/satonus/agent",
+    "model": "stepfun/step-3.5-flash",
+    "bindings": 0,
+    "isDefault": false
+  },
+  {
+    "id": "snowdrop",
+    "name": "Snowdrop",
+    "identityName": "Snowdrop",
+    "identitySource": "identity",
+    "workspace": "/home/yarizakurahime/claw/.openclaw/workspace-snowdrop",
+    "agentDir": "/home/yarizakurahime/claw/.openclaw/agents/snowdrop/agent",
+    "model": "stepfun/step-3.5-flash",
+    "bindings": 0,
+    "isDefault": false
+  }
+]

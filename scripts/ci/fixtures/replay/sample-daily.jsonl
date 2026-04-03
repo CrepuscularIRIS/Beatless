@@ -1,4 +1,0 @@
-{"action":"submit","task_id":"REPLAY-001","owner_agent":"methode","executor_tool":"codex_cli","prompt":"echo replay-test","phase":"execute"}
-{"action":"expect_result","task_id":"REPLAY-001","expect_status":"success"}
-{"action":"submit_receipt","task_id":"REPLAY-001","receipt_file":"scripts/ci/fixtures/replay/receipt-replay-001.md"}
-{"action":"expect_gate","task_id":"REPLAY-001","expect_pass":true,"receipt_file":"scripts/ci/fixtures/replay/receipt-replay-001.md"}
