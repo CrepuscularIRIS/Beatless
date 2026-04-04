@@ -176,6 +176,9 @@
             "web_fetch",
             "browser"
           ]
+        },
+        "heartbeat": {
+          "every": "30m"
         }
       },
       {
@@ -194,6 +197,9 @@
             "satonus",
             "snowdrop"
           ]
+        },
+        "heartbeat": {
+          "every": "30m"
         }
       },
       {
@@ -212,6 +218,9 @@
             "satonus",
             "snowdrop"
           ]
+        },
+        "heartbeat": {
+          "every": "30m"
         }
       },
       {
@@ -230,6 +239,9 @@
             "methode",
             "snowdrop"
           ]
+        },
+        "heartbeat": {
+          "every": "30m"
         }
       },
       {
@@ -248,6 +260,9 @@
             "methode",
             "satonus"
           ]
+        },
+        "heartbeat": {
+          "every": "30m"
         }
       }
     ]
@@ -364,7 +379,12 @@
   },
   "skills": {
     "allowBundled": [
-      "__none__"
+      "coding-agent",
+      "gemini",
+      "tmux",
+      "healthcheck",
+      "security-audit",
+      "session-logs"
     ],
     "load": {
       "extraDirs": [
