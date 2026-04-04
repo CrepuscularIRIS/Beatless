@@ -6,3 +6,9 @@ runtime/scheduler/.scheduler.lock
 runtime/jobs/*
 !runtime/jobs/.gitkeep
 runtime/state/experiment_nonmock_*.json
+runtime/meta_harness/*
+!runtime/meta_harness/.gitkeep
+runtime/nlm/*
+!runtime/nlm/.gitkeep
+runtime/soak/*
+!runtime/soak/.gitkeep

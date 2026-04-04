@@ -55,3 +55,15 @@
 - [x] `scripts/parse_codex_result.py` available
 - [x] `scripts/verify_gates.sh` available
 - [x] `scripts/smoke_trigger_v21.sh` passing
+
+## H. V3 Soak Quality Metrics
+- [x] `scripts/soak_harness_v21_8h.sh` emits cycle metrics (`diff_lines`, `test_count`, `file_touched`)
+- [x] false-pass detection enabled (`false_pass` field in soak JSONL)
+- [x] soak summary includes `false_pass_cycles`
+
+## I. Sidecar Integration
+- [x] Meta-harness sidecar runner present (`scripts/meta_harness_sidecar_run.sh`)
+- [x] Meta-harness sidecar smoke passing (`scripts/smoke_meta_harness_sidecar.sh`)
+- [x] NotebookLM sidecar runner present (`scripts/notebooklm_sidecar_sync.sh`)
+- [x] NotebookLM sidecar smoke passing (`scripts/smoke_notebooklm_sidecar.sh`)
+- [x] Sidecar integration doc present (`docs/V3_SIDECAR_INTEGRATION.md`)

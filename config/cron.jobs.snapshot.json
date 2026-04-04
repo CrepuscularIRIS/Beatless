@@ -1,5 +1,76 @@
 {
+  "version": 1,
   "jobs": [
+    {
+      "id": "781e47cf-75b4-4c64-adf0-9a9c9e08738c",
+      "agentId": "lacia",
+      "name": "Maintenance-Daily-Lacia",
+      "description": "Daily maintenance loop for OpenClaw stack",
+      "enabled": true,
+      "createdAtMs": 1775230092007,
+      "updatedAtMs": 1775265635271,
+      "schedule": {
+        "kind": "cron",
+        "expr": "20 9 * * *",
+        "tz": "Asia/Shanghai"
+      },
+      "sessionTarget": "isolated",
+      "wakeMode": "now",
+      "payload": {
+        "kind": "agentTurn",
+        "message": "[AUTO][MAINTAIN] Check gateway/cron/session health; inspect last 24h failures; review mailbox backlog; if needed delegate to Satonus/Methode; APPEND ONLY (do not overwrite existing file) a new timestamped block to /home/yarizakurahime/claw/Queue.md with issue, action, next step; output DONE/BLOCKED/NEXT.",
+        "timeoutSeconds": 1200
+      },
+      "delivery": {
+        "mode": "none",
+        "channel": "last"
+      },
+      "state": {
+        "nextRunAtMs": 1775352000000,
+        "lastRunAtMs": 1775265600006,
+        "lastRunStatus": "ok",
+        "lastStatus": "ok",
+        "lastDurationMs": 35265,
+        "lastDelivered": false,
+        "lastDeliveryStatus": "not-delivered",
+        "consecutiveErrors": 0
+      }
+    },
+    {
+      "id": "b4efa598-3e6d-4fe7-b896-38c1ee24c1de",
+      "agentId": "snowdrop",
+      "name": "Github-Explore-Snowdrop",
+      "description": "Daily GitHub exploration and opportunity discovery",
+      "enabled": true,
+      "createdAtMs": 1775230093815,
+      "updatedAtMs": 1775270437640,
+      "schedule": {
+        "kind": "cron",
+        "expr": "40 10 * * *",
+        "tz": "Asia/Shanghai"
+      },
+      "sessionTarget": "isolated",
+      "wakeMode": "now",
+      "payload": {
+        "kind": "agentTurn",
+        "message": "[AUTO][GITHUB-EXPLORE] Use github/gh-issues to scan openclaw/openclaw, openclaw/skills, CrepuscularIRIS/ClawRoom and ecosystem updates. Return top 5 findings with URL + impact + suggested action. IMPORTANT: do not edit/write any local files; output summary only.",
+        "timeoutSeconds": 1500
+      },
+      "delivery": {
+        "mode": "none",
+        "channel": "last"
+      },
+      "state": {
+        "nextRunAtMs": 1775356800000,
+        "lastRunAtMs": 1775270400008,
+        "lastRunStatus": "ok",
+        "lastStatus": "ok",
+        "lastDurationMs": 37632,
+        "lastDelivered": false,
+        "lastDeliveryStatus": "not-delivered",
+        "consecutiveErrors": 0
+      }
+    },
     {
       "id": "ef970584-4245-4831-82c4-b4c8e9b9fa13",
       "agentId": "methode",
@@ -7,7 +78,7 @@
       "description": "PR preparation and controlled auto-submit workflow",
       "enabled": true,
       "createdAtMs": 1775230095674,
-      "updatedAtMs": 1775230770390,
+      "updatedAtMs": 1775318831975,
       "schedule": {
         "kind": "cron",
         "expr": "0 */4 * * *",
@@ -26,11 +97,11 @@
         "channel": "last"
       },
       "state": {
-        "nextRunAtMs": 1775232167997,
-        "lastRunAtMs": 1775230753846,
+        "nextRunAtMs": 1775332967997,
+        "lastRunAtMs": 1775318568028,
         "lastRunStatus": "ok",
         "lastStatus": "ok",
-        "lastDurationMs": 16544,
+        "lastDurationMs": 263947,
         "lastDelivered": false,
         "lastDeliveryStatus": "not-delivered",
         "consecutiveErrors": 0
@@ -43,7 +114,7 @@
       "description": "Periodic CI/review/security guard",
       "enabled": true,
       "createdAtMs": 1775230097459,
-      "updatedAtMs": 1775230819519,
+      "updatedAtMs": 1775319933621,
       "schedule": {
         "kind": "cron",
         "expr": "15 */3 * * *",
@@ -61,90 +132,15 @@
         "channel": "last"
       },
       "state": {
-        "nextRunAtMs": 1775232900000,
-        "lastRunAtMs": 1775230770396,
+        "nextRunAtMs": 1775330100000,
+        "lastRunAtMs": 1775319300028,
         "lastRunStatus": "ok",
         "lastStatus": "ok",
-        "lastDurationMs": 49123,
-        "lastDelivered": false,
+        "lastDurationMs": 633593,
         "lastDeliveryStatus": "not-delivered",
-        "consecutiveErrors": 0
-      }
-    },
-    {
-      "id": "781e47cf-75b4-4c64-adf0-9a9c9e08738c",
-      "agentId": "lacia",
-      "name": "Maintenance-Daily-Lacia",
-      "description": "Daily maintenance loop for OpenClaw stack",
-      "enabled": true,
-      "createdAtMs": 1775230092007,
-      "updatedAtMs": 1775230708574,
-      "schedule": {
-        "kind": "cron",
-        "expr": "20 9 * * *",
-        "tz": "Asia/Shanghai"
-      },
-      "sessionTarget": "isolated",
-      "wakeMode": "now",
-      "payload": {
-        "kind": "agentTurn",
-        "message": "[AUTO][MAINTAIN] Check gateway/cron/session health; inspect last 24h failures; review mailbox backlog; if needed delegate to Satonus/Methode; APPEND ONLY (do not overwrite existing file) a new timestamped block to /home/yarizakurahime/claw/Queue.md with issue, action, next step; output DONE/BLOCKED/NEXT.",
-        "timeoutSeconds": 1200
-      },
-      "delivery": {
-        "mode": "none",
-        "channel": "last"
-      },
-      "state": {
-        "nextRunAtMs": 1775265600000,
-        "lastRunAtMs": 1775230679842,
-        "lastRunStatus": "ok",
-        "lastStatus": "ok",
-        "lastDurationMs": 28732,
-        "lastDelivered": false,
-        "lastDeliveryStatus": "not-delivered",
-        "consecutiveErrors": 0
-      }
-    },
-    {
-      "id": "b4efa598-3e6d-4fe7-b896-38c1ee24c1de",
-      "agentId": "snowdrop",
-      "name": "Github-Explore-Snowdrop",
-      "description": "Daily GitHub exploration and opportunity discovery",
-      "enabled": true,
-      "createdAtMs": 1775230093815,
-      "updatedAtMs": 1775230753840,
-      "schedule": {
-        "kind": "cron",
-        "expr": "40 10 * * *",
-        "tz": "Asia/Shanghai"
-      },
-      "sessionTarget": "isolated",
-      "wakeMode": "now",
-      "payload": {
-        "kind": "agentTurn",
-        "message": "[AUTO][GITHUB-EXPLORE] Use github/gh-issues to scan openclaw/openclaw, openclaw/skills, CrepuscularIRIS/ClawRoom and ecosystem updates. Return top 5 findings with URL + impact + suggested action. IMPORTANT: do not edit/write any local files; output summary only.",
-        "timeoutSeconds": 1500
-      },
-      "delivery": {
-        "mode": "none",
-        "channel": "last"
-      },
-      "state": {
-        "nextRunAtMs": 1775270400000,
-        "lastRunAtMs": 1775230708580,
-        "lastRunStatus": "ok",
-        "lastStatus": "ok",
-        "lastDurationMs": 45260,
-        "lastDelivered": false,
-        "lastDeliveryStatus": "not-delivered",
-        "consecutiveErrors": 0
+        "consecutiveErrors": 0,
+        "lastDelivered": false
       }
     }
-  ],
-  "total": 4,
-  "offset": 0,
-  "limit": 4,
-  "hasMore": false,
-  "nextOffset": null
+  ]
 }

@@ -32,7 +32,7 @@
     "providers": {
       "kimi-coding": {
         "baseUrl": "https://api.kimi.com/coding/v1",
-        "apiKey": "ENV_KEY",
+        "apiKey": "REDACTED",
         "api": "openai-completions",
         "headers": {
           "User-Agent": "claude-code/0.1.0"
@@ -53,13 +53,13 @@
               "cacheWrite": 0
             },
             "contextWindow": 262144,
-            "maxTokens": 32768
+            "maxTokens": "REDACTED"
           }
         ]
       },
       "minimax": {
         "baseUrl": "https://api.minimaxi.com/anthropic",
-        "apiKey": "ENV_KEY",
+        "apiKey": "REDACTED",
         "api": "anthropic-messages",
         "models": [
           {
@@ -74,7 +74,7 @@
       },
       "stepfun": {
         "baseUrl": "https://api.stepfun.com/v1",
-        "apiKey": "ENV_KEY",
+        "apiKey": "REDACTED",
         "api": "openai-completions",
         "models": [
           {
@@ -91,7 +91,7 @@
               "cacheWrite": 0
             },
             "contextWindow": 131072,
-            "maxTokens": 16384
+            "maxTokens": "REDACTED"
           }
         ]
       }
@@ -111,7 +111,7 @@
         "provider": "ollama",
         "remote": {
           "baseUrl": "http://127.0.0.1:11434",
-          "apiKey": "ollama-local"
+          "apiKey": "REDACTED"
         },
         "fallback": "keyword",
         "model": "qwen3-embedding:8b",
@@ -270,7 +270,7 @@
   "tools": {
     "web": {
       "search": {
-        "provider": "kimi",
+        "provider": "minimax",
         "maxResults": 6,
         "timeoutSeconds": 30,
         "enabled": false
@@ -321,7 +321,7 @@
     },
     "discord": {
       "enabled": false,
-      "token": "SET_ME",
+      "token": "REDACTED",
       "groupPolicy": "allowlist",
       "streaming": "off"
     },
@@ -467,9 +467,7 @@
       "metacognition": {
         "enabled": false
       },
-      "secret-scanner": {
-        "enabled": false
-      },
+      "secret-scanner": "REDACTED",
       "security-audit": {
         "enabled": true
       },
@@ -482,9 +480,7 @@
       "tmux": {
         "enabled": true
       },
-      "token-alert": {
-        "enabled": false
-      },
+      "token-alert": "REDACTED",
       "anti-injection-skill": {
         "enabled": true
       },
@@ -593,9 +589,7 @@
       "prose": {
         "enabled": false
       },
-      "1password": {
-        "enabled": false
-      },
+      "1password": "REDACTED",
       "blogwatcher": {
         "enabled": false
       },
@@ -874,8 +868,8 @@
         "resolvedName": "openclaw-stepfun",
         "resolvedVersion": "0.2.14",
         "resolvedSpec": "openclaw-stepfun@0.2.14",
-        "integrity": "sha512-E1SDmt+jlSkIytFCVITkyueiSv0gWPNqbptuOQDdLzMNhY13OKbDGqz/pGXLdlRvqRglxZSNQroIa8T2peFw3Q==",
-        "shasum": "30d42aa036547d29e62bc52dbbefc9fa20d35ad4",
+        "integrity": "REDACTED",
+        "shasum": "REDACTED",
         "resolvedAt": "2026-03-29T09:20:32.443Z",
         "installedAt": "2026-03-29T09:20:41.507Z"
       },
@@ -884,7 +878,7 @@
         "spec": "clawhub:openclaw-codex-app-server@0.5.0",
         "installPath": "/home/yarizakurahime/claw/.openclaw/extensions/openclaw-codex-app-server",
         "version": "0.5.0",
-        "integrity": "sha256-dQj44bbyNk5EtjJAykXEX3eTR7o9SILRxiVhKBrxjOI=",
+        "integrity": "REDACTED",
         "resolvedAt": "2026-03-30T16:06:40.836Z",
         "installedAt": "2026-03-30T16:06:40.838Z",
         "clawhubUrl": "https://clawhub.ai",
@@ -900,8 +894,8 @@
         "resolvedName": "@martian-engineering/lossless-claw",
         "resolvedVersion": "0.5.2",
         "resolvedSpec": "@martian-engineering/lossless-claw@0.5.2",
-        "integrity": "sha512-z1XP+czeRyyB31Mb3W++kXlldTisi9Ttqh25ggrm7rGMqBGpWxJ+sVAMGAHdKgSZTVmj8wOOVyMfEW9IHI6K+g==",
-        "shasum": "246d1a75bda9140ae47e57a0a987d0f8ac25abe4",
+        "integrity": "REDACTED",
+        "shasum": "REDACTED",
         "resolvedAt": "2026-03-30T16:07:23.559Z",
         "installedAt": "2026-03-30T16:08:05.573Z"
       },

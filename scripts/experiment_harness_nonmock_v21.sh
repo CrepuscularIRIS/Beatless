@@ -98,16 +98,45 @@ manifest = sorted(state_dir.glob("experiment_nonmock_expnm-*.json"))[-1]
 created = json.loads(manifest.read_text(encoding="utf-8"))
 
 errors = []
+metrics = {
+    "manifest": str(manifest),
+    "pass_jobs_target": len(created["pass"]),
+    "fail_jobs_target": len(created["fail"]),
+    "done_jobs": 0,
+    "escalated_jobs": 0,
+    "blocked_jobs": 0,
+    "file_touched": 0,
+    "test_count": 0,
+}
+changed_files = set()
 
 for jid in created["pass"]:
+    cp = root / "runtime" / "jobs" / jid / "contract.json"
+    c = json.loads(cp.read_text(encoding="utf-8"))
+    metrics["test_count"] += len(((c.get("acceptance") or {}).get("must_pass") or []))
     sp = root / "runtime" / "jobs" / jid / "state.json"
     st = json.loads(sp.read_text(encoding="utf-8"))
     if st.get("status") != "done":
         errors.append(f"{jid}: expected done, got {st.get('status')}")
     if st.get("current_iteration", 0) < 5:
         errors.append(f"{jid}: expected >=5 iterations, got {st.get('current_iteration')}")
+    if st.get("status") == "done":
+        metrics["done_jobs"] += 1
+    elif st.get("status") == "escalated":
+        metrics["escalated_jobs"] += 1
+    elif st.get("status") == "blocked":
+        metrics["blocked_jobs"] += 1
+    mf = root / "runtime" / "jobs" / jid / "artifacts" / "changed_files.txt"
+    if mf.exists():
+        for line in mf.read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if line:
+                changed_files.add(line)
 
 for jid in created["fail"]:
+    cp = root / "runtime" / "jobs" / jid / "contract.json"
+    c = json.loads(cp.read_text(encoding="utf-8"))
+    metrics["test_count"] += len(((c.get("acceptance") or {}).get("must_pass") or []))
     sp = root / "runtime" / "jobs" / jid / "state.json"
     st = json.loads(sp.read_text(encoding="utf-8"))
     if st.get("status") != "escalated":
@@ -115,6 +144,23 @@ for jid in created["fail"]:
     hints = (st.get("last_checkpoint") or {}).get("mode_hints") or []
     if not hints:
         errors.append(f"{jid}: expected mode_hints after repeated failures")
+    if st.get("status") == "done":
+        metrics["done_jobs"] += 1
+    elif st.get("status") == "escalated":
+        metrics["escalated_jobs"] += 1
+    elif st.get("status") == "blocked":
+        metrics["blocked_jobs"] += 1
+    mf = root / "runtime" / "jobs" / jid / "artifacts" / "changed_files.txt"
+    if mf.exists():
+        for line in mf.read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if line:
+                changed_files.add(line)
+
+metrics["file_touched"] = len(changed_files)
+metrics["diff_lines_proxy"] = metrics["file_touched"]
+metrics_path = state_dir / "experiment_nonmock_last_metrics.json"
+metrics_path.write_text(json.dumps(metrics, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
 
 if errors:
     print("EXPERIMENT FAIL")
@@ -126,4 +172,5 @@ print("EXPERIMENT PASS")
 print("Pass jobs:", len(created["pass"]))
 print("Fail jobs:", len(created["fail"]))
 print("Manifest:", manifest)
+print("Metrics:", metrics_path)
 PY

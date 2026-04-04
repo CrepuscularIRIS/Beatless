@@ -10,6 +10,8 @@ This directory contains runnable Task OS runtime state for the Beatless harness 
 - `state/metrics.json` : basic runtime metrics
 - `scheduler/config.json` : scheduler runtime config
 - `scheduler/config.json` : scheduler config (`harness` or `direct-pass`)
+- `meta_harness/<run_id>/` : sidecar benchmark artifacts (result/patch/env snapshot)
+- `nlm/` : NotebookLM sidecar local digests and sync status
 
 ## W2.1 behavior
 Scheduler executes one gated stage per pass:
