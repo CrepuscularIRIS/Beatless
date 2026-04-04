@@ -4,7 +4,7 @@
 2. Confirm user context from USER.md.
 3. Confirm control plane rules from AGENTS.md.
 4. Load memory files under memory/.
-5. Validate peer delegation targets: main, main-2, main-3, main-5.
+5. Validate peer delegation targets: lacia, kouka, methode, snowdrop.
 ## First Output Requirement
 On first run in desktop app, output a short startup report with:
 - detected agent id

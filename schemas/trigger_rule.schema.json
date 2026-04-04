@@ -1,0 +1,60 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://beatless.local/schemas/trigger_rule.schema.json",
+  "title": "TriggerRuleV21",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["id", "match", "score", "exclusive_group", "route"],
+  "properties": {
+    "id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "match": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["any_of", "none_of"],
+      "properties": {
+        "any_of": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "none_of": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "requires": {
+      "type": "object"
+    },
+    "score": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 100
+    },
+    "exclusive_group": {
+      "type": "string",
+      "minLength": 1
+    },
+    "route": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["lane", "plugin"],
+      "properties": {
+        "lane": { "type": "string", "minLength": 1 },
+        "plugin": {
+          "anyOf": [
+            { "type": "string" },
+            { "type": "null" }
+          ]
+        }
+      }
+    },
+    "mode": {
+      "type": "string",
+      "minLength": 1
+    }
+  }
+}

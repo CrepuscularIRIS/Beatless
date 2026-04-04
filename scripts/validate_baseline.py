@@ -2,6 +2,8 @@
 import json
 from pathlib import Path
 
+import yaml
+
 root = Path(__file__).resolve().parents[1]
 expected_agents = ["lacia", "methode", "kouka", "snowdrop", "satonus"]
 required_files = ["AGENTS.md", "SOUL.md", "TOOLS.md", "IDENTITY.md", "USER.md", "HEARTBEAT.md", "BOOTSTRAP.md"]
@@ -23,5 +25,33 @@ if set(expected_agents) - set(agent_ids):
 cron = json.loads((root / "config" / "cron.jobs.snapshot.json").read_text())
 if "jobs" not in cron:
     raise SystemExit("cron snapshot missing jobs")
+
+runtime_required = [
+    root / "runtime" / "state" / "queue.json",
+    root / "runtime" / "state" / "metrics.json",
+    root / "runtime" / "scheduler" / "config.json",
+    root / "schemas" / "task_contract.schema.json",
+    root / "schemas" / "task_contract.example.json",
+    root / "schemas" / "trigger_rule.schema.json",
+    root / "config" / "claudecode_plugin_trigger_matrix.v2.yaml",
+    root / "scripts" / "resolve_trigger.py",
+    root / "scripts" / "build_mode_selector.py",
+    root / "scripts" / "parse_codex_result.py",
+    root / "scripts" / "verify_gates.sh",
+]
+for p in runtime_required:
+    if not p.exists() or p.stat().st_size == 0:
+        raise SystemExit(f"missing/empty task-os file: {p}")
+
+json.loads((root / "runtime" / "state" / "queue.json").read_text())
+json.loads((root / "runtime" / "state" / "metrics.json").read_text())
+json.loads((root / "runtime" / "scheduler" / "config.json").read_text())
+json.loads((root / "schemas" / "task_contract.schema.json").read_text())
+json.loads((root / "schemas" / "task_contract.example.json").read_text())
+json.loads((root / "schemas" / "trigger_rule.schema.json").read_text())
+
+trigger_cfg = yaml.safe_load((root / "config" / "claudecode_plugin_trigger_matrix.v2.yaml").read_text())
+if not isinstance(trigger_cfg, dict) or "trigger_rules_v21" not in trigger_cfg:
+    raise SystemExit("trigger matrix missing trigger_rules_v21")
 
 print("baseline validation passed")

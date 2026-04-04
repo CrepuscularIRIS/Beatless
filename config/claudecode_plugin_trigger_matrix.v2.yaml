@@ -1,0 +1,282 @@
+version: 2026-04-04-v2.1
+owner: beatless-v21
+purpose: >-
+  ClaudeCode plugin trigger matrix for Codex, AgentTeams, and RalphLoop.
+  Single-source routing rules with deterministic conflict resolution.
+
+preflight:
+  claude_plugins_required:
+    - codex@openai-codex
+    - agent-teams@claude-code-workflows
+    - ralph-loop@claude-plugins-official
+  env_required:
+    CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS: "1"
+  settings_recommended:
+    teammateMode: tmux
+
+plugins:
+  codex:
+    namespace: "/codex"
+    core_commands:
+      - setup
+      - status
+      - review
+      - adversarial-review
+      - rescue
+      - result
+      - cancel
+    strengths:
+      - deterministic review gate
+      - adversarial challenge review
+      - deep rescue/fix thread with resume/fresh
+    default_execution:
+      short_task: "--wait"
+      long_task: "--background"
+    hard_rules:
+      - "review/adversarial-review are review-only; no patching in same command"
+      - "rescue may patch, and should choose --resume for follow-up continuation"
+
+  agent_teams:
+    namespace: "/agent-teams"
+    core_commands:
+      - team-spawn
+      - team-feature
+      - team-debug
+      - team-review
+      - team-delegate
+      - team-status
+      - team-shutdown
+    strengths:
+      - parallel decomposition by file ownership
+      - team-level task coordination
+      - dependency-aware execution
+    hard_rules:
+      - "Only use for complex tasks that can be decomposed into non-overlapping streams"
+      - "Must define owned files per stream before spawn"
+      - "If team state becomes unstable, fallback to single-lane ClaudeBuildCli"
+
+  ralph_loop:
+    namespace: "/ralph-loop"
+    core_commands:
+      - ralph-loop
+      - cancel-ralph
+      - help
+    strengths:
+      - iterative build loop in same session via stop hook
+      - deterministic iteration counter and exit promise
+    hard_rules:
+      - "ALWAYS set --max-iterations"
+      - "Set --completion-promise only when completion can be objectively checked"
+      - "Not for broad architecture exploration or ambiguous product decisions"
+
+trigger_rules_v21:
+  - id: build_simple
+    match:
+      any_of: ["实现功能", "修bug", "补测试", "重构模块", "写一个", "修复"]
+      none_of: ["并行", "直到通过", "多轮", "迭代", "分流"]
+    requires:
+      file_count: "<=5"
+    score: 10
+    exclusive_group: build_mode
+    route:
+      lane: claude_build_cli
+      plugin: none
+    mode: single_lane
+    适用条件: "单文件或少量文件的明确任务"
+    禁用条件: "editable_paths 跨 3 个以上目录"
+
+  - id: build_iterative_loop
+    match:
+      any_of: ["直到通过", "反复迭代", "循环打磨", "多轮修复"]
+      none_of: ["并行", "分流", "多子任务"]
+    requires:
+      has_testable_criteria: true
+    score: 20
+    exclusive_group: build_mode
+    route:
+      lane: claude_build_cli
+      plugin: "/ralph-loop \"{{goal}}\" --max-iterations {{budget.max_iterations|default:8}} --completion-promise \"ALL_CHECKS_PASS\""
+    mode: ralph_loop
+    适用条件: "有可执行验收命令的收敛型任务"
+    禁用条件: "goal 含探索/调研/比较方案等开放词"
+
+  - id: build_parallel_complex
+    match:
+      any_of: ["并行开发", "分流实现", "全栈改造", "迁移", "多子任务", "并行"]
+      none_of: []
+    requires:
+      file_count: ">=4"
+      decomposable: true
+    score: 30
+    exclusive_group: build_mode
+    route:
+      lane: claude_build_cli
+      plugin: "/agent-teams:team-feature \"{{goal}}\" --team-size {{min(ceil(file_count/5),5)}} --plan-first"
+    mode: agent_teams
+    适用条件: "改动面跨 3+ 目录且可拆非重叠子集"
+    禁用条件: "editable_paths 只有 1 个目录"
+
+  - id: debug_competing
+    match:
+      any_of: ["根因不明", "复杂故障", "多个假设"]
+      none_of: []
+    requires: {}
+    score: 25
+    exclusive_group: build_mode
+    route:
+      lane: claude_build_cli
+      plugin: "/agent-teams:team-debug \"{{goal}}\" --hypotheses 3 --scope module"
+    mode: agent_teams_debug
+    适用条件: "错误日志存在但原因不确定"
+    禁用条件: "已知单点故障"
+
+  - id: rescue_followup
+    match:
+      any_of: ["继续修复", "resume codex", "接着修", "继续之前"]
+      none_of: []
+    requires:
+      has_prior_codex_session: true
+    score: 60
+    exclusive_group: build_mode
+    route:
+      lane: codex_review_cli
+      plugin: "/codex:rescue --resume"
+    mode: codex_rescue
+    适用条件: "存在 prior Codex session"
+    禁用条件: "无 prior session"
+
+  - id: review_gate
+    match:
+      any_of: ["审查", "review", "合并前检查", "PR 检查"]
+      none_of: []
+    requires: {}
+    score: 55
+    exclusive_group: review_mode
+    route:
+      lane: codex_review_cli
+      plugin: "/codex:review --background --scope working-tree"
+    mode: codex_review
+    适用条件: "存在 diff 可审"
+    禁用条件: "无 staged/unstaged changes"
+
+  - id: adversarial_challenge
+    match:
+      any_of: ["挑战方案", "反对视角", "设计是否成立", "tradeoff"]
+      none_of: []
+    requires: {}
+    score: 50
+    exclusive_group: review_mode
+    route:
+      lane: codex_review_cli
+      plugin: "/codex:adversarial-review --background --scope working-tree"
+    mode: codex_adversarial
+    适用条件: "存在架构文档或设计决策可审"
+    禁用条件: "纯代码修复无设计维度"
+
+  - id: research
+    match:
+      any_of: ["调研", "论文", "趋势", "资料综合", "查一下", "看看别人怎么做"]
+      none_of: []
+    requires: {}
+    score: 10
+    exclusive_group: research_mode
+    route:
+      lane: gemini_research_cli
+      plugin: none
+    mode: research_lane
+    适用条件: "需要外部信息"
+    禁用条件: "纯内部代码问题"
+
+  - id: architecture_planning
+    match:
+      any_of: ["架构", "系统设计", "harness", "prompt工程", "上下文工程"]
+      none_of: []
+    requires: {}
+    score: 10
+    exclusive_group: planning_mode
+    route:
+      lane: claude_architect_cli
+      plugin: none
+    mode: architect_lane
+    适用条件: "设计阶段"
+    禁用条件: "已有明确实现方案"
+
+conflict_resolution:
+  priority_chain:
+    - exclusive_group_disjoint_allows_coexist
+    - same_group_highest_score_wins
+    - same_score_most_requires_wins
+    - deterministic_tiebreak_by_id_alphabetical
+  default_route:
+    id: build_simple
+    mode: single_lane
+
+escalation_thresholds:
+  single_to_ralph:
+    condition: "consecutive_verify_fail >= 2 AND has_testable_criteria"
+    action: "wrap goal as ralph-loop"
+  single_to_teams:
+    condition: "current_diff_file_count > 10 OR dir_count >= 3"
+    action: "pause, require Lacia plan-first"
+  ralph_to_teams_debug:
+    condition: "consecutive_no_progress >= 3"
+    action: "/cancel-ralph -> team-debug"
+  ralph_to_codex_rescue:
+    condition: "consecutive_same_error >= 2"
+    action: "/cancel-ralph -> /codex:rescue --fresh"
+
+degradation_thresholds:
+  teams_to_single:
+    condition: "team_status == unstable OR teammate_error OR 30min_no_diff"
+    action: "team-shutdown -> single-lane resume"
+  teams_file_conflict:
+    condition: "two_teammates_modify_same_file"
+    action: "immediate team-shutdown -> Lacia re-plan"
+  ralph_exhausted:
+    condition: "iterations == max_iterations AND verify != PASS"
+    action: "single-lane final attempt -> blocked if fail"
+  codex_rescue_exhausted:
+    condition: "rescue_resume_fail >= 2"
+    action: "/codex:rescue --fresh -> escalate if fail"
+
+agent_role_defaults:
+  lacia:
+    primary_mode: planner-orchestrator
+    allowed_plugin_priority: [agent_teams, codex, ralph_loop]
+    defaults:
+      complex_build: "/agent-teams:team-feature ... --plan-first"
+      gate: "/codex:review --background"
+      avoid: "ralph loop as default path"
+
+  methode:
+    primary_mode: builder
+    allowed_plugin_priority: [ralph_loop, agent_teams, codex]
+    defaults:
+      iterative_build: "/ralph-loop ... --max-iterations 8"
+      complex_build: "/agent-teams:team-feature ..."
+      merge_gate: "/codex:review --wait"
+
+  satonus:
+    primary_mode: reviewer-guard
+    allowed_plugin_priority: [codex, agent_teams, ralph_loop]
+    defaults:
+      gate: "/codex:review --background"
+      challenge: "/codex:adversarial-review --background"
+      rescue: "/codex:rescue --wait"
+      avoid: "long ralph loop"
+
+  snowdrop:
+    primary_mode: researcher
+    allowed_plugin_priority: [agent_teams, codex, ralph_loop]
+    defaults:
+      parallel_research: "/agent-teams:team-spawn research --name research-team"
+      synthesis_gate: "/codex:adversarial-review --wait <architecture focus>"
+      avoid: "ralph loop for open-ended research"
+
+  kouka:
+    primary_mode: publisher-integrator
+    allowed_plugin_priority: [codex, agent_teams, ralph_loop]
+    defaults:
+      release_review: "/agent-teams:team-review <target> --reviewers architecture,testing,security"
+      final_gate: "/codex:review --wait"
+      avoid: "deep debug loops unless delegated"

@@ -20,3 +20,11 @@ jobs:
       - name: Validate baseline
         run: |
           python3 scripts/validate_baseline.py
+
+      - name: Validate TaskContract example
+        run: |
+          python3 scripts/validate_task_contract.py schemas/task_contract.example.json
+
+      - name: Task OS smoke
+        run: |
+          bash scripts/smoke_test_task_os.sh

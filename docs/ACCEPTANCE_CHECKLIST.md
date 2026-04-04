@@ -24,3 +24,34 @@
 - [x] ChatPanel default router mode enabled
 - [x] No local LLM config auto-falls back to OpenClaw router
 - [x] Aoi shell context injected before routing to each main agent
+
+## E. Task OS W1
+- [x] `runtime/` skeleton initialized
+- [x] `schemas/task_contract.schema.json` + example present
+- [x] `scripts/validate_task_contract.py` executable and passing on example
+- [x] `scripts/task_os_scheduler.py --once` transitions queued job to done (direct-pass)
+- [x] `scripts/smoke_test_task_os.sh` passing
+
+## E2. Task OS W2.1 Closed Loop
+- [x] scheduler `harness` mode enabled (`runtime/scheduler/config.json`)
+- [x] staged execution produces `iteration/<n>/trigger_event.json`
+- [x] closed-loop smoke success path reaches `done`
+- [x] closed-loop smoke failure path reaches `escalated` with mode hints
+- [x] `MOCK_WORKER=1 bash scripts/smoke_task_os_closed_loop_v21.sh` passing
+
+## F. ClaudeCode Harness V2
+- [x] `config/claudecode_plugin_trigger_matrix.v2.yaml` present and parseable
+- [x] `docs/CLAUDECODE_HARNESS_V2.md` published
+- [x] 5 agents `TOOLS.md` include V2 harness policy references
+- [x] Plugin smoke:
+  - [x] `/codex:status --all`
+  - [x] `/ralph-loop:help`
+  - [x] `/agent-teams:team-status --json`
+
+## G. Trigger V2.1
+- [x] single-source rules `trigger_rules_v21` present
+- [x] `scripts/resolve_trigger.py` available
+- [x] `scripts/build_mode_selector.py` available
+- [x] `scripts/parse_codex_result.py` available
+- [x] `scripts/verify_gates.sh` available
+- [x] `scripts/smoke_trigger_v21.sh` passing

@@ -17,8 +17,22 @@ This repository is reset to the new Beatless baseline aligned with the live Open
 - `config/openclaw.redacted.json` : runtime config snapshot with secrets removed
 - `config/cron.jobs.snapshot.json` : current cron automation snapshot
 - `config/agents.snapshot.json` : current agent list snapshot
+- `config/claudecode_plugin_trigger_matrix.v2.yaml` : ClaudeCode plugin trigger routing policy v2.1 (single-source rules)
+- `schemas/` : Task OS schemas (`task_contract`, `state`, `envelope`)
+- `runtime/` : Task OS runtime (`jobs`, `state`, `scheduler`) with harness mode
 - `docs/` : acceptance and OpenRoom integration design
-- `scripts/validate_baseline.py` : CI validation
+- `docs/CLAUDECODE_HARNESS_V2.md` : Claude-first execution harness strategy for V2
+- `docs/CLAUDECODE_HARNESS_V2_1.md` : executable V2.1 trigger/gate baseline
+- `scripts/validate_baseline.py` : baseline + runtime skeleton validation
+- `scripts/validate_task_contract.py` : minimal TaskContract validator
+- `scripts/task_os_scheduler.py` : scheduler with harness stage machine + legacy direct-pass mode
+- `scripts/smoke_test_task_os.sh` : W1 smoke test
+- `scripts/smoke_task_os_closed_loop_v21.sh` : V2.1 closed-loop smoke (success + escalation paths)
+- `scripts/resolve_trigger.py` : deterministic trigger resolver
+- `scripts/build_mode_selector.py` : single/ralph/teams mode selector
+- `scripts/parse_codex_result.py` : codex gate parser (PASS/FAIL)
+- `scripts/verify_gates.sh` : stage gate checker
+- `scripts/smoke_trigger_v21.sh` : trigger/gate smoke
 
 ## CI
 `beatless-baseline-validate` checks:
@@ -26,3 +40,20 @@ This repository is reset to the new Beatless baseline aligned with the live Open
 2. key contract files exist
 3. redacted config is parseable and includes 5-agent list
 4. cron snapshot is parseable
+5. task-os runtime skeleton files exist
+
+## Task OS W1
+Initialize:
+`python3 scripts/init_task_os.py`
+
+Validate contract:
+`python3 scripts/validate_task_contract.py schemas/task_contract.example.json`
+
+Run scheduler once:
+`python3 scripts/task_os_scheduler.py --once`
+
+Run V2.1 closed-loop smoke:
+`bash scripts/smoke_task_os_closed_loop_v21.sh`
+
+Run smoke:
+`bash scripts/smoke_test_task_os.sh`

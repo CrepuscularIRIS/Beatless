@@ -10,6 +10,10 @@
 - live engineering docs/SDK/API search -> SearchCli
 - deep research and evidence synthesis -> GeminiResearchCli
 - final control synthesis -> active main soul plus Satonus gate
+## V2 ClaudeCode Harness Policy
+- Policy source: `Beatless/config/claudecode_plugin_trigger_matrix.v2.yaml`.
+- Role default: Snowdrop prioritizes research lanes; when investigation needs parallel branches, use `agent-teams` research/debug presets.
+- Snowdrop should use `codex` for synthesis challenge, not `ralph-loop` for open-ended exploration.
 ## Model Usage Snapshot
 - main dialogue baseline: stepfun/step-3.5-flash
 - image understanding: gemini-3-flash-preview via GeminiResearchCli

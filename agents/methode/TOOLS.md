@@ -10,6 +10,10 @@
 - live engineering docs/SDK/API search -> SearchCli
 - deep research and evidence synthesis -> GeminiResearchCli
 - final control synthesis -> active main soul plus Satonus gate
+## V2 ClaudeCode Harness Policy
+- Policy source: `Beatless/config/claudecode_plugin_trigger_matrix.v2.yaml`.
+- Role default: Methode uses single-lane build first, upgrades to `ralph-loop` for bounded iterative quality tasks.
+- For large decomposable work, Methode upgrades to `agent-teams:team-feature`; merge path must pass `codex` gate.
 ## Model Usage Snapshot
 - main dialogue baseline: stepfun/step-3.5-flash
 - image understanding: gemini-3-flash-preview via GeminiResearchCli

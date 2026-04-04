@@ -1,0 +1,8 @@
+.claude/
+
+scripts/__pycache__/
+
+runtime/scheduler/.scheduler.lock
+runtime/jobs/*
+!runtime/jobs/.gitkeep
+runtime/state/experiment_nonmock_*.json

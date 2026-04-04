@@ -10,6 +10,10 @@
 - live engineering docs/SDK/API search -> SearchCli
 - deep research and evidence synthesis -> GeminiResearchCli
 - final control synthesis -> active main soul plus Satonus gate
+## V2 ClaudeCode Harness Policy
+- Policy source: `Beatless/config/claudecode_plugin_trigger_matrix.v2.yaml`.
+- Role default: Kouka prioritizes integration/release quality, typically using `agent-teams:team-review` plus final `codex` gate.
+- Avoid deep long-form debug loops unless delegated by Lacia or Methode.
 ## Model Usage Snapshot
 - main dialogue baseline: stepfun/step-3.5-flash
 - image understanding: gemini-3-flash-preview via GeminiResearchCli

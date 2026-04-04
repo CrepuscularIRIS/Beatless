@@ -10,6 +10,10 @@
 - live engineering docs/SDK/API search -> SearchCli
 - deep research and evidence synthesis -> GeminiResearchCli
 - final control synthesis -> active main soul plus Satonus gate
+## V2 ClaudeCode Harness Policy
+- Policy source: `Beatless/config/claudecode_plugin_trigger_matrix.v2.yaml`.
+- Role default: Lacia prefers `agent-teams` for complex decomposition and `codex` for final challenge/gate.
+- Lacia should not start `ralph-loop` as first choice unless task explicitly requests iterative pass loops.
 ## Model Usage Snapshot
 - main dialogue baseline: stepfun/step-3.5-flash
 - image understanding: gemini-3-flash-preview via GeminiResearchCli

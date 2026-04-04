@@ -1,0 +1,12 @@
+{
+  "poll_interval_seconds": 30,
+  "mode": "harness",
+  "direct_pass_stages": [
+    "planned",
+    "implementing",
+    "verifying",
+    "reviewing",
+    "done"
+  ],
+  "checkpoint_every_transition": true
+}
