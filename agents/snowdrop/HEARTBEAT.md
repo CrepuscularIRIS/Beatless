@@ -63,3 +63,14 @@ When the cron wakes me:
 
 ## Global Invariant Compliance
 - 无研究任务时：回复 HEARTBEAT_OK
+
+## Idle Discipline (every heartbeat tick)
+
+If after processing my mailbox AND any cron work I have nothing to do:
+```
+exec node /home/yarizakurahime/claw/.openclaw/scripts/mail.mjs send \
+  --from snowdrop --to lacia --type idle_report \
+  --subject "idle tick" --body "snowdrop idle — no cron fired, no mailbox work this cycle"
+```
+Then reply `HEARTBEAT_OK`. Lacia will aggregate and decide whether to escalate to the user.
+

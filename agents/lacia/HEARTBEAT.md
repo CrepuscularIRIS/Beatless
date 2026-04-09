@@ -71,5 +71,86 @@ When the cron wakes me:
 6. Append report to Queue.md (APPEND-ONLY, timestamped block)
 7. Output DONE / BLOCKED / NEXT per cron contract
 
+## Inter-Agent Idle Aggregation (every heartbeat tick)
+
+On EVERY heartbeat tick (not just the daily cron):
+1. Read my mailbox: `exec node /home/yarizakurahime/claw/.openclaw/scripts/mail.mjs read --agent lacia --unread --limit 20`
+2. Count unread `idle_report` letters from the 4 non-Lacia agents.
+3. **If ≥ 3 agents reported idle AND no active TaskEnvelope in Queue.md**:
+   - Push a notification to the user via StepFun:
+     `exec bash /home/yarizakurahime/claw/.openclaw/scripts/notify-user.sh "<N>/4 Beatless agents idle — no task in queue. What should I work on next? (idle: <agent list>)"`
+   - After push, mark all idle_report letters read:
+     `exec node /home/yarizakurahime/claw/.openclaw/scripts/mail.mjs mark --agent lacia --id <id>` (for each)
+4. If < 3 idle or active task exists → just mark stale idle_reports read, do NOT push (avoid noise).
+
+Cooldown: do not push more than once every 60 minutes. Track last push timestamp in `.openclaw/mailbox/lacia.last-push.txt`.
+
+## Long-Cycle Pipeline (8-hour Heartbeat-driven)
+
+On EVERY heartbeat tick (30-min interval), after idle aggregation, check for **active pipeline state** in `.openclaw/mailbox/pipeline-state.json`:
+
+### Pipeline State Machine
+
+```
+IDLE → PHASE_A_DISPATCHED → PHASE_A_COMPLETE → PHASE_B_DISPATCHED → PHASE_B_COMPLETE → ...
+```
+
+**Tick logic:**
+1. `exec: cat .openclaw/mailbox/pipeline-state.json` (or create if missing)
+2. Based on current state:
+
+| State | Action |
+|-------|--------|
+| `IDLE` | No active pipeline. Check Queue.md for new tasks. If found, transition to PHASE_A_DISPATCHED. |
+| `PHASE_A_DISPATCHED` | Check if Kouka/Methode mailed back a `task_result`. If yes → advance to PHASE_A_COMPLETE. If >2h elapsed → send reminder. |
+| `PHASE_A_COMPLETE` | Read result from mailbox. Dispatch PHASE_B to next agent. Write PHASE_B_DISPATCHED. |
+| `PHASE_B_DISPATCHED` | Same as A — poll for result, advance or remind. |
+| `PHASE_B_COMPLETE` | Aggregate results. Write summary to Queue.md. Push StepFun notification. Return to IDLE. |
+
+3. Write updated state: `exec: node -e "..." > .openclaw/mailbox/pipeline-state.json`
+
+### Blog Maintenance Pipeline (Kouka → Satonus → Lacia)
+
+| Phase | Agent | Task | Timeout |
+|-------|-------|------|---------|
+| A | Kouka | Audit blog posts, write rewrite drafts to `~/blog/drafts/` | 2h |
+| B | Satonus | Review drafts via `claude_code_cli` with "codex review" keyword | 1h |
+| C | Lacia | Aggregate verdicts, write Queue.md summary, push StepFun | 30min |
+
+### GitHub Discovery Pipeline (Snowdrop → Methode → Satonus → Kouka)
+
+| Phase | Agent | Task | Timeout |
+|-------|-------|------|---------|
+| A | Snowdrop | Find 5 candidate repos (5k-30k stars, bug issues) via `claude_code_cli` with web_fetch | 1h |
+| B | Methode | Clone repos to `/home/yarizakurahime/workspace/ghsim/`, run AgentTeam (scanner+analyst+patcher) | 3h |
+| C | Satonus | Review patches via `claude_code_cli` with "codex review" | 1h |
+| D | Kouka | Package PR artifacts to `/home/yarizakurahime/workspace/pr-stage/` | 1h |
+
+### AgentTeam Default for Multi-Repo Discovery
+
+When dispatching PHASE_B to Methode for GitHub discovery:
+```
+mail send --from lacia --to methode --type task_request
+  --subject "ghsim: clone+analyze 5 repos"
+  --body "Candidates at /home/yarizakurahime/workspace/ghsim/candidates.yaml.
+          For EACH repo, use claude_code_cli with AgentTeam:
+          --agents '{\"scanner\":{...},\"analyst\":{...},\"patcher\":{...}}'
+          Save team-report.md + patches per repo.
+          This is MULTI-REPO — use parallel execution."
+```
+
+### MiniMax M2.7 Routing for Writing Tasks
+
+When the pipeline needs **article writing, blog drafts, or document generation**:
+```
+mail send --from lacia --to kouka --type task_request
+  --subject "write blog post: <topic>"
+  --body "Use MiniMax M2.7 (your fallback model) for writing.
+          Do NOT use claude_code_cli for the writing itself.
+          Use exec to invoke MiniMax directly or write inline.
+          Save to ~/blog/drafts/<slug>.md"
+```
+Kouka's fallback model (MiniMax-M2.7) is optimized for document writing tasks.
+
 ## Global Invariant Compliance
 - 与 global.md INVARIANT #7 对齐：无任务时可回复 HEARTBEAT_OK

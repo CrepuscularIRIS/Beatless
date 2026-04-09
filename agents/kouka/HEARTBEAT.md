@@ -61,7 +61,7 @@ Before delivering, verify:
 When the cron wakes me:
 1. Read shared memory for delivered artifacts this week (Methode PRs, Satonus PASS verdicts)
 2. If research needed → dispatch to Snowdrop via mailbox with explicit topic
-3. Draft new blog post via `rc "/gsd-do draft blog post about <topic>"`
+3. Draft new blog post via `rc "/gsd-do draft blog post about <topic> and save to ~/blog/posts/YYYY-MM-DD-<slug>.md"` — **canonical blog path is `~/blog/posts/`** (Astro site). Drafts go to `~/blog/drafts/`. Never write to `test-output/` or any sandbox unless explicitly told.
 4. For audio content → invoke `bash .openclaw/workspace-snowdrop/skills/minimax-multimodal-toolkit/scripts/tts/generate_voice.sh tts "<content>" -o <path>`
 5. For visuals → invoke `bash .../scripts/image/generate_image.sh --prompt "<prompt>" -o <path>`
 6. Append delivery note to Queue.md with blog_status / published_posts / drafts / next_topics
@@ -69,3 +69,14 @@ When the cron wakes me:
 
 ## Global Invariant Compliance
 - 无交付任务时：回复 HEARTBEAT_OK
+
+## Idle Discipline (every heartbeat tick)
+
+If after processing my mailbox AND any cron work I have nothing to do:
+```
+exec node /home/yarizakurahime/claw/.openclaw/scripts/mail.mjs send \
+  --from kouka --to lacia --type idle_report \
+  --subject "idle tick" --body "kouka idle — no cron fired, no mailbox work this cycle"
+```
+Then reply `HEARTBEAT_OK`. Lacia will aggregate and decide whether to escalate to the user.
+
