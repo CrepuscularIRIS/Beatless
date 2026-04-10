@@ -88,12 +88,17 @@ async function runProcess(command, args, opts) {
       for (const [k, v] of Object.entries(cleanEnv)) {
         if (v === "SET_ME" || v === "set_me" || v === "") delete cleanEnv[k];
       }
-      // CRITICAL: Remove dummy ANTHROPIC_API_KEY so claude CLI falls back to
+      // Remove dummy ANTHROPIC_API_KEY so claude CLI falls back to
       // OAuth (.claude/.credentials.json) instead of trying an invalid key.
-      // The gateway env has ANTHROPIC_API_KEY=allgerto (placeholder) which
+      // The gateway env may have ANTHROPIC_API_KEY=allgerto (placeholder) which
       // causes every claude_code_cli call to fail with "Invalid API key".
       if (cleanEnv.ANTHROPIC_API_KEY && cleanEnv.ANTHROPIC_API_KEY.length < 20) {
         delete cleanEnv.ANTHROPIC_API_KEY;
+      }
+      // Clear CLAUDE_CODE_PERMISSION_MODE from env — redundant with CLI args
+      // and can interfere with OAuth fallback.
+      if (cleanEnv.CLAUDE_CODE_PERMISSION_MODE) {
+        delete cleanEnv.CLAUDE_CODE_PERMISSION_MODE;
       }
       // Ensure claude CLI can find OAuth credentials via HOME
       if (!cleanEnv.HOME) cleanEnv.HOME = process.env.HOME || "/home/" + (process.env.USER || "root");
@@ -127,6 +132,7 @@ async function runProcess(command, args, opts) {
 }
 
 async function runClaude(prompt, model, opts) {
+  // Use claude binary with OAuth (requires clean env + bypassPermissions for non-interactive).
   const res = await runProcess("claude", ["--permission-mode", "bypassPermissions", "--model", model, "--print", prompt], opts);
   if (!res.ok) {
     const detail = `exit=${res.code} stderr=${short(res.stderr, 200)} stdout=${short(res.stdout, 200)} prompt=${short(prompt, 80)}`;
@@ -210,4 +216,3 @@ const plugin = {
 };
 
 export default plugin;
-

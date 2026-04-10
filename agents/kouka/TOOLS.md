@@ -103,3 +103,30 @@ All 5 agents use **step-3.5-flash** as their primary model. MiniMax-M2.7 is the 
 
 **Never use MiniMax-M2.7 as the reasoning model for code/research/review tasks — it hallucinates tool usage.**
 
+
+## MiniMax Asset Output Paths
+
+All MiniMax-generated assets MUST be saved to the dedicated output directory. Never scatter files in working directories.
+
+| Asset Type | Output Path | Model (from .env) |
+|-----------|-------------|-------------------|
+| Images | `/home/yarizakurahime/claw/output/minimax/images/` | MINIMAX_IMAGE_MODEL |
+| TTS Audio | `/home/yarizakurahime/claw/output/minimax/audio/tts/` | MINIMAX_TTS_MODEL / _HD / _TURBO |
+| Music | `/home/yarizakurahime/claw/output/minimax/audio/music/` | MINIMAX_MUSIC_MODEL |
+| Video | `/home/yarizakurahime/claw/output/minimax/video/` | MINIMAX_VIDEO_MODEL_T2V / _I2V / _SEF / _S2V |
+| Documents | `/home/yarizakurahime/claw/output/minimax/documents/` | MiniMax DOCX/PDF/XLSX skills |
+
+**Naming convention**: `<date>-<agent>-<slug>.<ext>` (e.g. `2026-04-10-kouka-blog-hero.png`)
+
+**Example usage** (via exec):
+```bash
+# TTS
+bash .openclaw/workspace-snowdrop/skills/minimax-multimodal-toolkit/scripts/tts/generate_voice.sh tts "<text>" -o /home/yarizakurahime/claw/output/minimax/audio/tts/2026-04-10-kouka-blog-intro.mp3
+
+# Image
+bash .openclaw/skills/minimax-multimodal/scripts/image/generate_image.sh --prompt "<prompt>" -o /home/yarizakurahime/claw/output/minimax/images/2026-04-10-kouka-hero.png
+
+# Music
+bash .openclaw/skills/minimax-multimodal/scripts/music/generate_music.sh --prompt "<prompt>" -o /home/yarizakurahime/claw/output/minimax/audio/music/2026-04-10-snowdrop-ambient.mp3
+```
+
