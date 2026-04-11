@@ -1,0 +1,7 @@
+expnm-1775417230
+scheduler drain complete: total_changed_jobs=35 orchestration_mode=harness
+EXPERIMENT PASS
+Pass jobs: 4
+Fail jobs: 3
+Manifest: /home/yarizakurahime/claw/Beatless/runtime/state/experiment_nonmock_expnm-1775417230.json
+Metrics: /home/yarizakurahime/claw/Beatless/runtime/state/experiment_nonmock_last_metrics.json

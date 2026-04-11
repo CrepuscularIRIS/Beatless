@@ -1,0 +1,53 @@
+{
+  "stage": "verifying",
+  "normalized_stage": "review",
+  "prompt": "Smoke validation of Beatless Task OS W1 scheduler direct-pass mode.",
+  "resolution": {
+    "selected": [
+      {
+        "id": "build_simple",
+        "mode": "single_lane",
+        "group": "build_mode"
+      }
+    ],
+    "fallback_default": true,
+    "rejections": [
+      {
+        "id": "build_simple",
+        "reason": "stage filtered"
+      },
+      {
+        "id": "build_iterative_loop",
+        "reason": "stage filtered"
+      },
+      {
+        "id": "build_parallel_complex",
+        "reason": "stage filtered"
+      },
+      {
+        "id": "debug_competing",
+        "reason": "stage filtered"
+      },
+      {
+        "id": "rescue_followup",
+        "reason": "stage filtered"
+      },
+      {
+        "id": "review_gate",
+        "reason": "text mismatch"
+      },
+      {
+        "id": "adversarial_challenge",
+        "reason": "text mismatch"
+      },
+      {
+        "id": "research",
+        "reason": "text mismatch"
+      },
+      {
+        "id": "architecture_planning",
+        "reason": "stage filtered"
+      }
+    ]
+  }
+}

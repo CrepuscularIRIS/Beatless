@@ -1,0 +1,13 @@
+{
+  "iteration": 4,
+  "job_id": "smoke-1775546213",
+  "stage_status": "reviewing",
+  "stage": "reviewing",
+  "result": "completed",
+  "at": "2026-04-07T07:16:53+00:00",
+  "message": "direct-pass stage result",
+  "details": {
+    "mode": "direct-pass"
+  },
+  "trigger_event_ref": "iteration/4/trigger_event.json"
+}

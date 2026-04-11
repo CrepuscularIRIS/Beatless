@@ -12,3 +12,4 @@ runtime/nlm/*
 !runtime/nlm/.gitkeep
 runtime/soak/*
 !runtime/soak/.gitkeep
+.gemini-tasks/

@@ -1,0 +1,17 @@
+{
+  "verify_pass": true,
+  "logs": [
+    {
+      "cmd": "test -d .",
+      "code": 0,
+      "stdout_tail": "",
+      "stderr_tail": ""
+    },
+    {
+      "cmd": "true",
+      "code": 0,
+      "stdout_tail": "",
+      "stderr_tail": ""
+    }
+  ]
+}

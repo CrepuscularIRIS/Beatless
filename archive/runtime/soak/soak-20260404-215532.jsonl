@@ -1,0 +1,7 @@
+{"ts": 1775321536, "cycle": 36, "phase": "experiment", "rc": 1, "message": "failed"}
+{"ts": 1775321536, "cycle": 36, "phase": "drain", "rc": 1, "message": "post-cycle drain"}
+{"ts": 1775321836, "cycle": 37, "phase": "experiment", "rc": 1, "message": "failed"}
+{"ts": 1775321836, "cycle": 37, "phase": "drain", "rc": 1, "message": "post-cycle drain"}
+{"ts": 1775322136, "cycle": 38, "phase": "experiment", "rc": 1, "message": "failed"}
+{"ts": 1775322136, "cycle": 38, "phase": "drain", "rc": 1, "message": "post-cycle drain"}
+{"ts": 1775322136, "cycle": 38, "phase": "abort", "rc": 1, "message": "max failures reached"}

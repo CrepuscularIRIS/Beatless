@@ -1,59 +1,123 @@
-# Beatless (OpenClaw 5-MainAgent Baseline)
+# Beatless — Autonomous Agent System (Hermes v2.1)
 
-This repository is reset to the new Beatless baseline aligned with the live OpenClaw runtime.
+6-agent autonomous system for GitHub issue hunting, blog maintenance, and research automation. Built on Hermes Agent framework with ClaudeCode as the execution engine.
 
-## Baseline Scope
-- 5 Main Agents: `lacia`, `methode`, `kouka`, `snowdrop`, `satonus`
-- Main model baseline: `stepfun/step-3.5-flash`
-- External lanes (via rawcli router plugin):
-  - `claude_architect_cli` (Opus 4.6)
-  - `claude_build_cli` (Kimi K2.5)
-  - `codex_review_cli` (GPT-5.3-Codex)
-  - `search_cli` (MiniMax M2.7)
-  - `gemini_research_cli` (Gemini 3.1 Pro Preview)
+## Architecture
 
-## Directory
-- `agents/<id>/` : exported workspace contracts (`AGENTS.md`, `SOUL.md`, `TOOLS.md`, etc.)
-- `config/openclaw.redacted.json` : runtime config snapshot with secrets removed
-- `config/cron.jobs.snapshot.json` : current cron automation snapshot
-- `config/agents.snapshot.json` : current agent list snapshot
-- `config/claudecode_plugin_trigger_matrix.v2.yaml` : ClaudeCode plugin trigger routing policy v2.1 (single-source rules)
-- `schemas/` : Task OS schemas (`task_contract`, `state`, `envelope`)
-- `runtime/` : Task OS runtime (`jobs`, `state`, `scheduler`) with harness mode
-- `docs/` : acceptance and OpenRoom integration design
-- `docs/CLAUDECODE_HARNESS_V2.md` : Claude-first execution harness strategy for V2
-- `docs/CLAUDECODE_HARNESS_V2_1.md` : executable V2.1 trigger/gate baseline
-- `scripts/validate_baseline.py` : baseline + runtime skeleton validation
-- `scripts/validate_task_contract.py` : minimal TaskContract validator
-- `scripts/task_os_scheduler.py` : scheduler with harness stage machine + legacy direct-pass mode
-- `scripts/smoke_test_task_os.sh` : W1 smoke test
-- `scripts/smoke_task_os_closed_loop_v21.sh` : V2.1 closed-loop smoke (success + escalation paths)
-- `scripts/resolve_trigger.py` : deterministic trigger resolver
-- `scripts/build_mode_selector.py` : single/ralph/teams mode selector
-- `scripts/parse_codex_result.py` : codex gate parser (PASS/FAIL)
-- `scripts/verify_gates.sh` : stage gate checker
-- `scripts/smoke_trigger_v21.sh` : trigger/gate smoke
+```
+User (StepFun APP / OpenRoom)
+  ↓
+Aoi (MiniMax M2.7) — dispatcher only
+  ↓ task_request via mailbox
+5 MainAgents (Step 3.5 Flash) — thin consumers
+  ↓ claude --print "/command"
+ClaudeCode (Sonnet 4.6) — execution engine
+  ├── Agent tool (parallel scanning)
+  ├── /codex:review (code audit)
+  └── /gemini:consult (research + architecture)
+```
 
-## CI
-`beatless-baseline-validate` checks:
-1. all 5 agents exist
-2. key contract files exist
-3. redacted config is parseable and includes 5-agent list
-4. cron snapshot is parseable
-5. task-os runtime skeleton files exist
+### Design Principles
 
-## Task OS W1
-Initialize:
-`python3 scripts/init_task_os.py`
+1. **Aoi is the only scheduler** — 30-min heartbeat, dispatches pipelines
+2. **Mailbox is 2-step only** — task_request → task_result, no multi-hop
+3. **Each MainAgent = 1 ClaudeCode command** — receive task, run `claude --print`, report result
+4. **ClaudeCode owns complexity** — AgentTeam, GSD, Codex/Gemini all run inside ClaudeCode
+5. **Triple review** — Claude (primary) + Codex (audit) + Gemini (research)
 
-Validate contract:
-`python3 scripts/validate_task_contract.py schemas/task_contract.example.json`
+## Agents
 
-Run scheduler once:
-`python3 scripts/task_os_scheduler.py --once`
+| Agent | Role | Model | Key Commands |
+|-------|------|-------|-------------|
+| **Aoi** | Dispatcher / control plane | MiniMax M2.7 | Pipeline scheduling, mailbox routing |
+| **Lacia** | Strategy / planning | Step 3.5 Flash → Sonnet | `/gsd-discuss-phase`, `/gsd-plan-phase` |
+| **Methode** | Execution / implementation | Step 3.5 Flash → Sonnet | `/gsd-execute-phase`, AgentTeam scanning |
+| **Satonus** | Review gate | Step 3.5 Flash → Sonnet | `/codex:review`, `/gemini:consult` |
+| **Snowdrop** | Research / discovery | Step 3.5 Flash → Sonnet | `/github-hunt`, `/gemini:consult` |
+| **Kouka** | Delivery / publishing | Step 3.5 Flash → Sonnet | `/blog-maintenance`, `/gsd-ship` |
 
-Run V2.1 closed-loop smoke:
-`bash scripts/smoke_task_os_closed_loop_v21.sh`
+## Pipelines
 
-Run smoke:
-`bash scripts/smoke_test_task_os.sh`
+### GitHub Issue Hunter (`/github-hunt`)
+
+Discovers 1K-10K star agent/LLM repos, deep scans with triple review, outputs validated issue proposals.
+
+- **Interval**: every 8 hours
+- **Output**: `~/workspace/pr-stage/<date>-<repo>-finding-<N>.md`
+- **Quality bar**: P0/P1 only, 2/3 reviewers must agree, no auto-submit
+
+### Blog Maintenance (`/blog-maintenance`)
+
+Audits existing posts, researches trending topics (Big Three AI, agent engineering, BCI), writes new posts.
+
+- **Interval**: every 12 hours
+- **Output**: `~/blog/src/content/blogs/<slug>/index.mdx`
+- **Topics**: Anthropic/OpenAI/DeepMind reports, agent frameworks, BCI research
+
+## File Structure
+
+```
+agents/
+├── aoi/SOUL.md          # Dispatcher protocol
+├── lacia/SOUL.md         # Strategy worker
+├── methode/SOUL.md       # Execution worker
+├── satonus/SOUL.md       # Review gate worker
+├── snowdrop/SOUL.md      # Research worker
+└── kouka/SOUL.md         # Delivery worker
+
+pipelines/
+├── github-hunt.md        # ClaudeCode command for issue hunting
+└── blog-maintenance.md   # ClaudeCode command for blog maintenance
+
+scripts/
+├── heartbeat-driver.sh   # Pipeline scheduler (checks schedules, launches tmux)
+├── cron-driver.sh        # Cron entry point (calls heartbeat-driver)
+└── session-watcher.sh    # Zombie process cleanup for AgentTeam
+
+docs/
+├── architecture-v2-simplification.md      # Original v2 proposal
+├── architecture-v2-simplification-v2.md   # v2.1 hardening
+└── openroom-alignment.md                  # OpenRoom integration plan
+
+archive/                  # Old OpenClaw-era files (reference only)
+```
+
+## Runtime Setup
+
+### Prerequisites
+
+- Hermes Agent installed at `~/claw/hermes-agent/venv/`
+- Claude Code CLI (`claude`)
+- Codex CLI (`codex`)
+- Gemini CLI (`gemini`)
+- GitHub CLI (`gh`, authenticated)
+- StepFun bridge at `~/.hermes/shared/scripts/stepfun-bridge.mjs`
+
+### Start the system
+
+```bash
+# 1. Start cron daemon (30-min heartbeat)
+nohup bash /tmp/hermes-cron-daemon.sh >> ~/.hermes/shared/cron-daemon.log 2>&1 &
+
+# 2. Start StepFun bridge (mobile interface)
+node ~/.hermes/shared/scripts/stepfun-bridge.mjs --probe
+
+# 3. Manual pipeline trigger
+bash ~/.hermes/shared/pipelines/github-hunt/test-run.sh
+bash ~/.hermes/shared/pipelines/blog-maintenance/test-run.sh
+```
+
+### Monitor
+
+```bash
+tmux attach -t github-hunt        # Watch pipeline output
+tmux attach -t blog-maintenance    # Watch pipeline output
+tail -f ~/.hermes/shared/logs/heartbeat.log  # Watch scheduler
+```
+
+## Validated Results (2026-04-11)
+
+| Pipeline | Duration | Output |
+|----------|----------|--------|
+| github-hunt | 52 min | 3 PASS proposals (TOCTOU race, 2x panic bugs), Codex+Gemini verified |
+| blog-maintenance | 40 min | 2 new posts (1500+ words), 1 rewrite, pnpm build PASS |

@@ -1,0 +1,5 @@
+{"ts": 1775321346, "cycle": 0, "phase": "start", "rc": 0, "message": "run_id=soak-20260405-004905 duration=25 interval=10 max_failures=2", "diff_lines": 0, "test_count": 0, "file_touched": 0, "done_jobs": 0, "escalated_jobs": 0, "blocked_jobs": 0, "false_pass": false}
+{"ts": 1775321349, "cycle": 1, "phase": "experiment", "rc": 0, "message": "ok", "diff_lines": 2, "test_count": 11, "file_touched": 2, "done_jobs": 4, "escalated_jobs": 3, "blocked_jobs": 0, "false_pass": false}
+{"ts": 1775321349, "cycle": 1, "phase": "drain", "rc": 0, "message": "post-cycle drain", "diff_lines": 0, "test_count": 0, "file_touched": 0, "done_jobs": 0, "escalated_jobs": 0, "blocked_jobs": 0, "false_pass": false}
+{"ts": 1775321361, "cycle": 2, "phase": "experiment", "rc": 0, "message": "ok", "diff_lines": 2, "test_count": 11, "file_touched": 2, "done_jobs": 4, "escalated_jobs": 3, "blocked_jobs": 0, "false_pass": false}
+{"ts": 1775321361, "cycle": 2, "phase": "drain", "rc": 0, "message": "post-cycle drain", "diff_lines": 0, "test_count": 0, "file_touched": 0, "done_jobs": 0, "escalated_jobs": 0, "blocked_jobs": 0, "false_pass": false}
