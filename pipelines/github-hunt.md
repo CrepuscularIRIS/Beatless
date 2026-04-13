@@ -1,37 +1,34 @@
 ---
 name: github-hunt
-description: "Autonomous bug hunting pipeline for 1K-10K star agent/LLM repos on GitHub. Discovers repos, clones, runs build verification, then performs independent triple review using Codex (via codex:codex-rescue agent), Gemini (via gemini:gemini-consult agent), and Claude's own analysis in parallel. Only files issues for bugs confirmed by >=2/3 reviewers. Use this skill whenever the user mentions hunting bugs, scanning GitHub repos, finding issues in open source projects, automated code auditing, or wants to discover and report bugs in agent/LLM repositories."
+description: "Deep autonomous bug hunting for 1K-10K star agent/LLM repos. Clones repos, sets up environment (uv/npm/go), runs existing tests to find real crashes, debugs failures to root cause, then performs parallel static security scan (Codex + Gemini + Claude). Files issues only for confirmed P0/P1 bugs with reproduction commands and stack traces. Use whenever the user mentions hunting bugs, scanning GitHub repos, finding issues in open source projects, automated code auditing, or deep testing of agent/LLM repositories."
 ---
 
-# GitHub Issue Hunt Pipeline
+# GitHub Deep Hunt Pipeline v3
 
-Autonomous pipeline: discover repos -> clone -> build verify -> **parallel triple review** (Codex + Gemini + Claude) -> cross-validate -> file issues.
+Discover repos → clone → **set up environment** → **run tests to find crashes** → **debug failures** → parallel static security scan → cross-validate → file issues.
 
-## Why This Architecture
+## Why v3
 
-Previous versions put Codex/Gemini calls inside a `claude --print` prompt, where Claude could (and did) skip the Bash calls entirely, fabricating "triple review" results from its own analysis alone. This skill fixes that by using Claude Code's **Agent tool** to spawn `codex:codex-rescue` and `gemini:gemini-consult` as independent subagents. These are real subprocesses that must execute — they cannot be skipped.
+v1 relied on `claude --print` which skipped Codex/Gemini. v2 added real Agent subagents but only did static code reading. v3 adds **dynamic testing** — build the project, run its test suite, catch real crashes, then debug them. Security issues remain static-analysis-only since they don't need runtime to detect.
 
 ## Execution Model
 
-- **Claude**: Primary analysis via Read/Grep/Glob tools + orchestration
-- **Codex**: Independent audit via `Agent` tool with `subagent_type: "codex:codex-rescue"`
-- **Gemini**: Independent analysis via `Agent` tool with `subagent_type: "gemini:gemini-consult"`
-- **GitHub CLI**: `gh` via Bash for search, clone, issue creation
-
-All three reviewers run **in parallel** as independent agents. Results are merged only after all three complete.
+- **Claude**: Orchestrator + direct analysis (Read/Grep/Glob) + GSD2-style debug
+- **Codex** (`codex:codex-rescue` agent): Independent security audit
+- **Gemini** (`gemini:gemini-consult` agent): Architecture-level security review + research
+- **gh CLI**: Repo search, clone, issue creation
+- **uv / npm / go**: Environment setup and test execution
 
 ## Context
 
-- Archive directory: `~/workspace/archive/`
-- Staging directory: `~/workspace/pr-stage/`
-- GitHub CLI: `gh` (authenticated as CrepuscularIRIS)
-- Working directory: MUST `cd` into each repo before analysis
+- Archive: `~/workspace/archive/`
+- Staging: `~/workspace/pr-stage/`
+- GitHub: `gh` authenticated as CrepuscularIRIS
+- Python venvs: use `uv` (fast, isolated)
 
 ---
 
 ## Phase 1: DISCOVERY
-
-Search for agent/LLM repos using `gh` via Bash:
 
 ```bash
 gh search repos --stars=1000..10000 --sort=updated --limit=30 \
@@ -39,140 +36,216 @@ gh search repos --stars=1000..10000 --sort=updated --limit=30 \
   -- "agent OR llm OR langchain OR autogen OR crewai OR swarm OR rag OR embedding OR inference OR serving"
 ```
 
-Filter criteria:
-- Has issues enabled, not archived, pushed in last 30 days
+Filter:
+- Issues enabled, not archived, pushed in last 30 days
 - Not already in `~/workspace/archive/`
-- Related to: AI agents, LLM frameworks, inference engines, RAG pipelines
-- Prefer: Python, TypeScript, Go, Rust repos with active communities
-- Avoid: tutorial repos, awesome-lists, wrapper-only projects
+- AI agents, LLM frameworks, inference, RAG pipelines
+- Prefer: Python, TypeScript, Go, Rust with active communities
+- Avoid: tutorials, awesome-lists, thin wrappers
 
-Select TOP 2 repos. Clone via Bash:
+Select TOP 2. Clone:
 ```bash
 gh repo clone <owner/repo> ~/workspace/archive/<repo-name> -- --depth=1
 ```
 
 ---
 
-## Phase 2: BUILD VERIFICATION
+## Phase 2: ENVIRONMENT SETUP
 
-For each cloned repo, verify it builds before analysis. Run via Bash:
+This phase is critical — without a working environment you can only do static analysis, missing the most valuable dynamic bugs.
 
 ```bash
 cd ~/workspace/archive/<repo-name>
 
-# Detect and run build
-if [ -f go.mod ]; then go build ./... 2>&1; fi
-if [ -f package.json ]; then npm install && npm run build 2>&1; fi
-if [ -f pyproject.toml ] || [ -f setup.py ]; then pip install -e . 2>&1; fi
-if [ -f Cargo.toml ]; then cargo build 2>&1; fi
+# Python
+if [ -f pyproject.toml ] || [ -f setup.py ] || [ -f requirements.txt ]; then
+  uv venv .venv && source .venv/bin/activate
+  # Try dev/test extras first for test dependencies
+  uv pip install -e ".[dev,test]" 2>&1 || uv pip install -e ".[dev]" 2>&1 || uv pip install -e . 2>&1
+  [ -f requirements.txt ] && uv pip install -r requirements.txt 2>&1
+  [ -f requirements-dev.txt ] && uv pip install -r requirements-dev.txt 2>&1
+fi
+
+# Go
+if [ -f go.mod ]; then
+  go mod download 2>&1
+  go build ./... 2>&1
+fi
+
+# Node.js
+if [ -f package.json ]; then
+  npm install 2>&1
+  npm run build 2>&1 || true
+fi
+
+# Rust
+if [ -f Cargo.toml ]; then
+  cargo build 2>&1
+fi
 ```
 
-If build fails, note it but still proceed with static analysis (many bugs are findable without a working build).
+Record the build outcome:
+- **BUILD PASS**: Proceed to dynamic testing (Phase 3)
+- **BUILD FAIL**: Log the error, proceed to static-only analysis (skip Phase 3, go to Phase 5)
 
 ---
 
-## Phase 3: TRIPLE INDEPENDENT REVIEW (Parallel Agents)
+## Phase 3: DYNAMIC TEST EXECUTION
 
-This is the critical phase. Spawn THREE independent agents in a SINGLE message using the Agent tool. All three must run — this is not optional.
-
-### Agent 1: Codex Review (codex:codex-rescue)
-
-Spawn with `subagent_type: "codex:codex-rescue"`:
-
-```
-Analyze the repository at ~/workspace/archive/<repo-name> for critical bugs.
-
-Focus on:
-1. Bugs that crash or corrupt data
-2. Security vulnerabilities (RCE, injection, SSRF, path traversal)
-3. Race conditions and concurrency bugs
-4. Missing error handling that causes panics/unhandled exceptions
-
-Only report P0/P1 severity. For each finding, provide:
-- File path and line number
-- Bug description (what's wrong)
-- Impact (what happens to users)
-- Suggested fix (one-liner)
-
-Output as structured text, one finding per section.
-```
-
-### Agent 2: Gemini Analysis (gemini:gemini-consult)
-
-Spawn with `subagent_type: "gemini:gemini-consult"`:
-
-```
-Analyze the repository at ~/workspace/archive/<repo-name> for critical bugs.
-
-Focus on:
-1. Crashes and data loss scenarios
-2. Security vulnerabilities exploitable by users
-3. Race conditions and deadlocks
-4. API contract violations and type mismatches
-
-Only report P0/P1 severity. For each finding, provide:
-- File path and line number
-- Bug description
-- Reproduction scenario
-- Severity justification
-
-Output as structured text, one finding per section.
-```
-
-### Agent 3: Claude Direct Analysis
-
-Use your own Read/Grep/Glob tools directly:
+Run the project's existing test suite. Test failures are the **strongest evidence** of real bugs — the project's own tests prove them.
 
 ```bash
 cd ~/workspace/archive/<repo-name>
+
+# Python
+if [ -f pyproject.toml ] || [ -f setup.py ]; then
+  source .venv/bin/activate 2>/dev/null
+  # Run with verbose output to capture stack traces
+  pytest --tb=long -v 2>&1 | tee /tmp/hunt-test-$(basename $PWD).log
+fi
+
+# Go (with race detector)
+if [ -f go.mod ]; then
+  go test -race -count=1 -v ./... 2>&1 | tee /tmp/hunt-test-$(basename $PWD).log
+fi
+
+# Node.js
+if [ -f package.json ]; then
+  npm test 2>&1 | tee /tmp/hunt-test-$(basename $PWD).log
+fi
+
+# Rust
+if [ -f Cargo.toml ]; then
+  cargo test 2>&1 | tee /tmp/hunt-test-$(basename $PWD).log
+fi
 ```
 
-- Read entry points (main.go, main.py, src/index.ts, etc.)
-- Grep for dangerous patterns: `eval(`, `exec(`, `unsafe`, `panic(`, `os.Exit`, `TODO`, `FIXME`, `HACK`
-- Find error handling gaps: bare `except:`, empty `catch {}`, unchecked error returns
-- Look for race conditions, goroutine leaks, missing locks
-- Check for security issues: hardcoded secrets, SQL injection, path traversal
+Parse results:
+- **ALL PASS**: Bugs are in untested code paths. Move to static analysis (Phase 5).
+- **SOME FAIL**: Each failure is a potential finding. Capture test name, stack trace, error. Move to Phase 4 (debug).
+- **NO TESTS**: No test suite. Move to static analysis (Phase 5).
 
-Focus on bugs that break functionality or crash the application. Not style issues.
+---
 
-### Cross-reference with existing issues
+## Phase 4: DEBUG FAILURES
 
-After all three agents complete, check existing issues:
+For each test failure from Phase 3, apply a lightweight GSD2-style debug workflow:
+
+### 4a. Isolate the failure
+
+Run the failing test alone to get a clean stack trace:
+```bash
+pytest tests/test_foo.py::test_failing_case -v --tb=long 2>&1
+```
+
+### 4b. Trace the root cause
+
+Read the stack trace bottom-up:
+1. What exception/panic was thrown?
+2. Which file:line triggered it?
+3. Read that code — what input causes the failure?
+4. Is this a real bug (wrong logic) or a test environment issue (missing mock, network dependency)?
+
+### 4c. Classify
+
+- **P0**: Crash, data loss, uncaught exception in production code path
+- **P1**: Wrong result, race condition, resource leak
+- **TEST_ENV**: Failure due to missing test fixture, network dependency, or flaky timing — skip these
+- **KNOWN**: Already reported as open issue — skip
+
+### 4d. Draft fix suggestion
+
+For each P0/P1 failure, write a 1-10 line suggested fix with explanation of why it works.
+
+### 4e. Save findings
+
+```
+~/workspace/pr-stage/<date>-<repo>-test-failure-<N>.md
+```
+
+Include: test command, full stack trace, root cause analysis, severity, suggested fix.
+
+---
+
+## Phase 5: STATIC SECURITY SCAN (Parallel Agents)
+
+Spawn THREE independent agents in a SINGLE message. Security vulnerabilities can be found without running code — static analysis is sufficient and often better for security.
+
+### Codex (`codex:codex-rescue` agent)
+
+```
+Security audit of ~/workspace/archive/<repo-name>.
+
+Focus ONLY on exploitable security vulnerabilities:
+1. RCE: eval(), exec(), subprocess with shell=True, unsandboxed code execution
+2. Injection: SQL injection, command injection, SSTI, XSS
+3. Path traversal: user-controlled file paths, symlink attacks, directory escape
+4. SSRF: HTTP requests with user-controlled URLs hitting internal services
+5. Auth bypass: missing auth checks, hardcoded credentials, token exposure
+
+For each finding provide: file:line, vulnerability type, exploitation scenario, suggested fix.
+P0 (directly exploitable) and P1 (requires specific conditions) only.
+```
+
+### Gemini (`gemini:gemini-consult` agent)
+
+```
+Architecture-level security and reliability review of ~/workspace/archive/<repo-name>.
+
+Focus on design-level issues:
+1. Trust boundaries: where does user input enter? Validated before sensitive operations?
+2. Concurrency: race conditions, TOCTOU, shared mutable state without locks
+3. Resource management: unclosed connections, unbounded queues, memory leaks on error paths
+4. API contracts: endpoints accepting more than intended, missing rate limits, open redirects
+
+For each finding: file:line, description, reproduction scenario, severity P0/P1.
+```
+
+### Claude Direct Analysis (Read/Grep/Glob)
+
+Grep for dangerous patterns and read the surrounding code to confirm:
+- `eval(`, `exec(`, `os.system(`, `subprocess.run(.*shell=True`
+- `trust_remote_code`, `pickle.load`, `yaml.load(` without SafeLoader
+- `tar.extractall(` without filter, `zipfile.extractall(` without validation
+- Hardcoded API keys, passwords, tokens in source files
+- HTTP handlers with no input validation
+
+Read the entry point files to understand the attack surface.
+
+---
+
+## Phase 6: CROSS-VALIDATION MERGE
+
+### Dynamic findings (from test failures in Phase 3-4)
+- Automatically confirmed — the test suite itself proves the bug
+- No >=2/3 agreement needed
+- Include: exact test command, stack trace, root cause, fix suggestion
+
+### Static findings (from security scan in Phase 5)
+- Require **>=2/3 reviewer agreement** (Claude + Codex + Gemini)
+- Verified by reading the actual code at file:line
+- Not already reported as an open issue
+
+### Dedup against existing issues
 ```bash
 gh issue list --repo <owner/repo> --state open --limit 200 --json title,body,labels | head -500
 ```
 
-Remove any finding that matches an existing open issue.
+Remove findings matching existing issues.
 
 ---
 
-## Phase 4: CROSS-VALIDATION MERGE
+## Phase 7: FILE ISSUES
 
-Only keep findings that meet ALL criteria:
-
-1. **>=2/3 reviewers flagged it** — at least two of (Claude, Codex, Gemini) independently identified the same bug
-2. **Verified by reading code** — you (Claude) Read the actual file and line to confirm the bug exists
-3. **Real impact** — the bug affects actual users, not theoretical edge cases
-4. **Not already reported** — no matching open issue exists
-5. **P0 or P1 severity only**:
-   - P0: Crashes, data loss, RCE, SQL injection, authentication bypass
-   - P1: Race conditions causing wrong results, API contract violations, resource leaks causing OOM, panics on malformed input
-
-Save validated findings to `~/workspace/pr-stage/<date>-<repo>-finding-<N>.md`.
-
----
-
-## Phase 5: FILE ISSUES
-
-For each validated finding, create a GitHub issue via Bash. Follow the professional format below — no internal jargon, no mention of "multi-agent analysis", no "soul contracts" or system names.
+For each validated finding:
 
 ```bash
 gh issue create --repo <owner/repo> \
-  --title "<concise bug title>" \
+  --title "<type>: <concise bug title>" \
   --body "$(cat <<'EOF'
 ## Bug Description
 
-<2-3 sentences: what's broken, in plain language>
+<2-3 sentences: what's broken>
 
 ## Location
 
@@ -180,36 +253,45 @@ gh issue create --repo <owner/repo> \
 
 ## Reproduction
 
-1. <step 1>
-2. <step 2>
-3. <observe: crash/wrong result/security issue>
+```bash
+# For dynamic bugs — exact test command:
+pytest tests/test_foo.py::test_failing -v
+
+# For security bugs — exploitation steps:
+curl -X POST http://localhost:8000/api/exec -d '{"code":"import os; os.system(\"id\")"}'
+```
+
+## Stack Trace
+
+```
+<paste stack trace for dynamic bugs, or code snippet showing the vulnerability for static bugs>
+```
 
 ## Impact
 
-<who is affected and how — data loss? crash? security exposure?>
+<crash? data loss? RCE? information disclosure?>
 
 ## Suggested Fix
 
-<brief description or pseudocode of the fix>
+```<language>
+<1-10 line minimal fix>
+```
 
 ---
-Found via automated codebase analysis. Happy to submit a PR if this is confirmed.
+Found via automated testing and codebase analysis. Happy to submit a PR if confirmed.
 EOF
 )"
 ```
 
-### Issue Quality Rules (from mention.md)
-
-The issue must read as if a competent engineer found the bug by reading the code:
-- **No internal workflow language** — don't mention agents, lanes, triple review, orchestration
-- **Problem -> Evidence -> Fix** — that's the only structure needed
-- **Be boring** — the most useful issues are the most straightforward ones
-- **One issue per bug** — don't bundle findings
-- **Minimal scope** — don't suggest refactors alongside the bug report
+### Quality Rules (from mention.md)
+- No internal jargon — no mention of "triple review", agents, or orchestration
+- Problem → Evidence → Fix format
+- For test failures: include the exact `pytest`/`go test` command (strongest evidence)
+- One issue per bug, minimal scope
 
 ---
 
-## Phase 6: SUMMARY REPORT
+## Phase 8: SUMMARY REPORT
 
 Write to `~/workspace/pr-stage/hunt-summary-<date>.md`:
 
@@ -217,35 +299,37 @@ Write to `~/workspace/pr-stage/hunt-summary-<date>.md`:
 # Hunt Summary — <date>
 
 ## Repos Scanned
-- <repo1> (<stars> stars, <language>) — <N> findings
-- <repo2> (<stars> stars, <language>) — <N> findings
+- <repo> (<stars>⭐, <lang>) — build: PASS/FAIL, tests: X pass / Y fail / Z skip
+
+## Dynamic Findings (from test execution)
+- <N> test failures analyzed
+- <M> confirmed as P0/P1 bugs
+- Evidence: test commands + stack traces
+
+## Static Findings (from security scan)
+- Codex: <N> findings
+- Gemini: <N> findings  
+- Claude: <N> findings
+- Passed >=2/3: <M> findings
 
 ## Issues Filed
-- <owner/repo>#<N>: <title> (P0/P1)
+| # | Repo | Title | Severity | Source |
+|---|------|-------|----------|--------|
+| 1 | owner/repo#N | title | P0 | dynamic/static |
 
-## Rejected Findings
-- <finding>: <reason for rejection>
-
-## Evidence
-- Codex output: <summary of what Codex found>
-- Gemini output: <summary of what Gemini found>
-- Claude output: <summary of what Claude found>
-- Agreement matrix: <which reviewers agreed on which findings>
-
-## Build Status
-- <repo1>: PASS/FAIL
-- <repo2>: PASS/FAIL
+## Rejected
+- <finding>: <reason>
 ```
 
 ---
 
 ## Rules
 
-1. **Spawn Codex and Gemini as parallel Agent subagents** — they are independent processes, not suggestions
-2. **Both Codex and Gemini must actually run** — check that you received results from both before proceeding to merge
-3. **>=2/3 agreement required** — a single reviewer's finding is not enough
-4. **Verify before claiming** — Read the actual code file and line
-5. **Professional issue format** — follow mention.md guidelines, no internal jargon
-6. **One issue per bug** — don't bundle
-7. **P0/P1 only** — skip style, docs, performance suggestions
-8. **Build first** — attempt build verification before analysis
+1. **Set up environment first** — build the project before analyzing it
+2. **Run tests** — test failures are the strongest bug evidence
+3. **Debug crashes to root cause** — don't just report "test failed", explain why
+4. **Parallel Codex + Gemini for security** — static analysis is sufficient for security
+5. **Dynamic findings auto-confirmed** — test failure IS the proof, no agreement needed
+6. **Static findings need >=2/3** — cross-validation still required for security claims
+7. **Include reproduction commands** — every issue should have a runnable test/curl command
+8. **Professional format** — no internal jargon, follow mention.md guidelines

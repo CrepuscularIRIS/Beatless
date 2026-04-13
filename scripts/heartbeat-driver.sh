@@ -37,10 +37,19 @@ check_pipeline() {
   status=$(python3 -c "import json; d=json.load(open('$state_file')); print(d.get('status','IDLE'))" 2>/dev/null || echo "IDLE")
   interval=$(python3 -c "import json; d=json.load(open('$state_file')); print(d.get('interval_hours',0))" 2>/dev/null || echo "0")
 
-  # Skip if already running
+  # Check if tmux session exists
   if tmux has-session -t "$name" 2>/dev/null; then
-    log "$name: already running in tmux, skipping"
-    return
+    # Get the shell PID inside the tmux pane
+    local pane_pid
+    pane_pid=$(tmux list-panes -t "$name" -F '#{pane_pid}' 2>/dev/null | head -1)
+    # Check if timeout or claude is still a child of that shell
+    if [ -n "$pane_pid" ] && ps --ppid "$pane_pid" -o args --no-headers 2>/dev/null | grep -q "timeout.*claude"; then
+      log "$name: still running, skipping"
+      return
+    else
+      log "$name: tmux session stale (pipeline finished), cleaning up"
+      tmux kill-session -t "$name" 2>/dev/null
+    fi
   fi
 
   # Skip if interval is null/0 (disabled pipeline)

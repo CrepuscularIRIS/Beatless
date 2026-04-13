@@ -154,13 +154,15 @@ Check the most recent posts for:
 
 Both agents must return results. If either finds critical issues (score < 6), address them before committing.
 
-### Commit (only if build passes and reviews acceptable)
+### Commit and Push (only if build passes and reviews acceptable)
 
 ```bash
 cd ~/blog && git add src/content/blogs/ && git commit -m "content: blog maintenance — new posts and cleanup"
+cd ~/blog && git push origin main
 ```
 
-Do NOT push unless explicitly asked.
+Auto-push is enabled because this pipeline runs autonomously via heartbeat.
+The blog deploys via GitHub Pages on push, so pushing is the final delivery step.
 
 ---
 
@@ -183,7 +185,7 @@ Output:
 1. **Spawn Gemini and Codex as Agent subagents** — real subprocesses, not prompt suggestions
 2. **Both must actually run** — verify you received results from both before proceeding
 3. **Never delete a blog post** — mark as draft at most
-4. **Never push** without explicit user request
+4. **Auto-push after commit** — pipeline runs autonomously, push is the delivery step
 5. **Never invent citations** — use Gemini research to verify URLs exist
 6. **Build must pass** before committing
 7. **All posts in MDX format** with valid frontmatter

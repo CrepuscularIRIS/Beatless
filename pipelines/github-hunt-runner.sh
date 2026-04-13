@@ -38,7 +38,7 @@ tmux new-session -d -s "$SESSION_NAME" bash -c "
     --dangerously-skip-permissions \
     --verbose \
     --add-dir $HOME/workspace \
-    -p 'Execute the github-hunt skill: discover 2 repos (1K-10K stars, agent/LLM topic), clone them, run build verification, then perform triple independent review using Codex (codex:codex-rescue agent), Gemini (gemini:gemini-consult agent), and your own analysis IN PARALLEL. Cross-validate findings (>=2/3 must agree). File GitHub issues only for confirmed P0/P1 bugs. Write summary to ~/workspace/pr-stage/. Both Codex and Gemini must actually run — check that you received results from both before merging.' \
+    -p 'Execute the github-hunt skill v3 (Deep Hunt): discover 2 repos (1K-10K stars, agent/LLM topic), clone them, SET UP ENVIRONMENT (uv venv + pip install for Python, go build for Go, npm install for Node), then RUN THE EXISTING TEST SUITE to find real crashes and failures. For each test failure, debug to root cause (trace stack, read code, classify P0/P1). In PARALLEL, run static security scan using Codex (codex:codex-rescue agent) and Gemini (gemini:gemini-consult agent) and your own grep analysis. Cross-validate: test failures are auto-confirmed (no agreement needed), static security findings need >=2/3 agreement. File GitHub issues with exact reproduction commands (pytest/go test commands) and stack traces. Write summary to ~/workspace/pr-stage/.' \
     2>&1 | tee -a '$LOG_FILE'
 
   EXIT_CODE=\$?
