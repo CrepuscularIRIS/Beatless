@@ -30,7 +30,7 @@ This persists state across tool calls and makes the pipeline resumable if interr
 
 ## Context
 
-- Archive: `~/workspace/archive/`
+- Contribution workspace: `~/workspace/contrib/` (fresh clones for PR work — separate from hunt archive)
 - Staging: `~/workspace/pr-stage/`
 - GitHub: `gh` authenticated as CrepuscularIRIS
 - Rubric: `~/workspace/pr-stage/pr-scoring-rubric.md`
@@ -47,17 +47,17 @@ Search for issues that maintainers have explicitly welcomed:
 # Priority 1: good first issue
 gh search issues --label="good first issue" --state=open --sort=updated --limit=20 \
   --json repository,title,number,labels,createdAt,comments \
-  -- "agent OR llm OR langchain OR rag OR mcp OR embedding"
+  -- "agent OR llm OR langchain OR rag OR mcp OR embedding" -author:CrepuscularIRIS
 
 # Priority 2: help wanted
 gh search issues --label="help wanted" --state=open --sort=updated --limit=20 \
   --json repository,title,number,labels,createdAt,comments \
-  -- "agent OR llm OR inference OR serving OR tool"
+  -- "agent OR llm OR inference OR serving OR tool" -author:CrepuscularIRIS
 
 # Priority 3: confirmed bugs
 gh search issues --label="bug" --state=open --sort=comments --limit=20 \
   --json repository,title,number,labels,createdAt,comments \
-  -- "crash OR panic OR fix OR broken"
+  -- "crash OR panic OR fix OR broken" -author:CrepuscularIRIS
 ```
 
 Selection criteria — ALL must be true:
@@ -75,7 +75,7 @@ Selection criteria — ALL must be true:
 Use **Gemini** (`gemini:gemini-consult`) for repo evaluation — its 1M context can read CONTRIBUTING.md, recent PRs, and project structure in one pass:
 
 ```
-Read the repository at ~/workspace/archive/<repo-name> and evaluate:
+Read the repository at ~/workspace/contrib/<repo-name> and evaluate:
 
 1. Read CONTRIBUTING.md — what are the PR requirements?
 2. Read .github/PULL_REQUEST_TEMPLATE.md — what format do they expect?
@@ -93,7 +93,7 @@ Skip repos that fail 3+ of: CONTRIBUTING.md, PR template, recent commits, mainta
 ## Phase 3: SETUP ENVIRONMENT + RUN TESTS
 
 ```bash
-cd ~/workspace/archive/<repo-name>
+cd ~/workspace/contrib/<repo-name>
 
 # Fork + upstream
 gh repo fork <owner/repo> --clone=false 2>/dev/null || true
@@ -161,7 +161,7 @@ Read the code at the crash site. Trace the execution path. Confirm:
 
 Spawn `codex:codex-rescue` in **diagnose mode** (read-only):
 ```
-Debug this test failure in ~/workspace/archive/<repo-name>.
+Debug this test failure in ~/workspace/contrib/<repo-name>.
 
 Failing test: <test name>
 Stack trace:
@@ -224,7 +224,7 @@ Codex excels at contained code changes. Use it in **write mode**:
 
 Spawn `codex:codex-rescue` with `--write`:
 ```
-Fix the bug in ~/workspace/archive/<repo-name> described in issue #<N>.
+Fix the bug in ~/workspace/contrib/<repo-name> described in issue #<N>.
 
 Root cause: <from Phase 5>
 File to change: <file:line>
@@ -286,7 +286,7 @@ Spawn all three reviewers in a SINGLE message using the **SuperPowers parallel d
 ### Codex review (`codex:codex-rescue`) — focus: correctness + code quality
 
 ```
-Review this git diff in ~/workspace/archive/<repo-name>.
+Review this git diff in ~/workspace/contrib/<repo-name>.
 
 Score each dimension 1-10:
 1. Correctness — does it fix the root cause, not just the symptom?
@@ -302,7 +302,7 @@ PASS if average >=7, FAIL otherwise. Be strict.
 ### Gemini review (`gemini:gemini-consult`) — focus: architecture + social fit
 
 ```
-Review this PR for ~/workspace/archive/<repo-name>.
+Review this PR for ~/workspace/contrib/<repo-name>.
 
 Read the diff AND the PR description draft. Score each dimension 1-10:
 1. Architecture fit — respects module design patterns and invariants?
