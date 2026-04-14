@@ -90,9 +90,11 @@ For each of the top 2 research topics:
    ---
    title: "<title>"
    description: "<one-line hook>"
-   pubDate: "<today YYYY-MM-DD>"
+   publishDate: "<today YYYY-MM-DD>"
    tags: [<relevant tags>]
-   isDraft: false
+   category: <research|engineering|tutorial|opinion>
+   language: en
+   draft: false
    ---
    ```
 3. Write 1500+ words:
@@ -114,6 +116,41 @@ If any posts classified REWRITE, pick the best topic and rewrite with deeper ana
 ### Draft cleanup
 
 For DRAFT posts: set `isDraft: true` in frontmatter. Never delete posts.
+
+---
+
+## Phase 3.5: BILINGUAL TRANSLATION
+
+The blog supports EN/ZH switching. Every post should have a counterpart in the other language.
+
+### How bilingual works in this blog
+
+- Posts with `language: zh` appear under the Chinese site (`/blog/`)
+- Posts with `language: en` appear under the English site (`/en/blog/`)
+- Each language version is a SEPARATE post directory with its own `index.mdx`
+- Convention: Chinese slug = `my-post`, English slug = `my-post-en`
+
+### Translation rules
+
+1. **New posts**: Write in English first (`language: en`), then create a Chinese counterpart
+2. **Existing Chinese-only posts**: Each pipeline run, translate 1-2 Chinese posts to English
+3. **Translation is NOT literal** — adapt the content for the target audience:
+   - English: more direct, reference international papers, explain Chinese-specific context
+   - Chinese: can use more colloquial tech terms, reference Chinese ecosystem
+4. **Use Gemini for translation assist** — spawn `gemini:gemini-consult`:
+   ```
+   Translate this blog post from Chinese to English. This is a technical blog targeting
+   international AI/ML researchers. Do NOT translate literally — adapt idioms, restructure
+   for English readers, keep technical terms in English. Maintain all code blocks unchanged.
+   Output the full translated index.mdx with updated frontmatter (language: en).
+   ```
+5. **Frontmatter must include**: `language: en` (or `zh`), matching tags, same category
+
+### Priority for translation (per run, pick 1-2)
+
+1. Posts about original architecture/projects (beatless-architecture, openclaw-agent-lifecycle)
+2. Technical deep-dives (attention-residuals, from-resnet-to-rde)
+3. Weekly summaries (lowest priority — too ephemeral)
 
 ---
 
