@@ -304,12 +304,15 @@ Focus: **correctness + code quality**
 Review this git diff in ~/workspace/contrib/<repo-name>.
 You are an independent reviewer — you did NOT write this code.
 
+MANDATORY: Before scoring, you MUST run the test suite yourself and paste the output summary (pass/fail count).
+Also run ONE manual verification: revert the fix, run the new test, confirm it FAILS. Then re-apply and confirm it PASSES. Paste both outputs as proof.
+
 Score each dimension 1-10 (anchor at 7 = acceptable):
 1. Correctness — does it fix the root cause? Could it introduce new bugs? Cite specific lines.
 2. Minimality — are ALL changed lines necessary? Flag any line that could be removed.
 3. Code quality — does it match repo style exactly? Check naming, indentation, patterns.
-4. Test coverage — do tests actually exercise the fix? Could the tests pass even WITHOUT the fix (false green)?
-5. No regressions — check edge cases the fix might break. List 2-3 scenarios you verified.
+4. Test coverage — do tests actually exercise the fix? Could the tests pass even WITHOUT the fix (false green)? You MUST verify this by reverting the fix and running the test.
+5. No regressions — check edge cases the fix might break. List 2-3 scenarios you verified by running code.
 
 For EACH dimension, output:
 | Dimension | Score | Evidence (file:line + specific observation) | Deduction reason (if <10) |
@@ -357,9 +360,33 @@ Output: 8 rows with Score (1-10) + Evidence. Average must be >=7.
 
 ### Gate decision
 
-- All three reviewers PASS + overall average >=7.0 → proceed to Phase 10
+- All three reviewers PASS + overall average >=7.0 → proceed to Phase 9b
 - Any single reviewer FAIL → fix issues, re-run Phase 8-9
 - Any hard fail trigger → STOP, pick a different issue
+
+### Phase 9b: ITERATIVE IMPROVEMENT (max 2 rounds)
+
+After the first review round, collect ALL deduction items into a fix list. Then:
+
+1. **Fix what you can** — missing changeset, missing test, missing comment → implement now
+2. **Document what you can't** — "partial-duplicate case is out of scope per issue" → add to PR notes
+3. **Re-verify** — run tests again after any code change (`Phase 8` quick re-run)
+4. **Re-score ONLY the changed dimensions** — don't re-score everything. Only re-evaluate dimensions where the fix addressed a specific deduction.
+
+Example iteration:
+```
+Round 1: Codex Social fit = 6 (missing changeset)
+→ Action: run `pnpm changeset`, add patch entry
+→ Round 2: Codex Social fit = 8 (changeset present, PR not yet submitted)
+```
+
+**Rules:**
+- Maximum 2 improvement rounds. If still <7.0 after round 2, STOP — the issue may be too complex or the fix approach is wrong
+- Never re-score a dimension that had no code change — score inflation through re-asking is not improvement
+- Record each round in `findings.md` with before/after scores and what changed
+- The FINAL score (after improvements) is what goes in `pr-report.md`
+
+**Final gate**: overall average >=7.5 after improvements → proceed to Phase 10. (Higher bar than round 1 because improvements were applied.)
 
 ---
 
