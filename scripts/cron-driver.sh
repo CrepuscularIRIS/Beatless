@@ -4,12 +4,12 @@
 # Called from cron daemon every 30 minutes.
 # Runs heartbeat-driver.sh which checks pipeline schedules and launches due pipelines.
 #
-# Usage: */30 * * * * /home/yarizakurahime/.hermes/shared/scripts/cron-driver.sh
+# Usage: */30 * * * * /home/yarizakurahime/claw/.openclaw/hermes/scripts/cron-driver.sh
 
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-LOG_DIR="/home/yarizakurahime/.hermes/shared/logs"
+LOG_DIR="/home/yarizakurahime/claw/.openclaw/hermes/logs"
 mkdir -p "$LOG_DIR"
 
 TS=$(date -u +"%Y-%m-%dT%H:%M:%SZ")

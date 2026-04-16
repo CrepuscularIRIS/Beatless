@@ -10,7 +10,7 @@
 
 set -euo pipefail
 
-SHARED_DIR="$HOME/.hermes/shared"
+SHARED_DIR="/home/yarizakurahime/claw/.openclaw/hermes"
 LOG_DIR="$SHARED_DIR/logs"
 PIPELINE_DIR="$SHARED_DIR/pipelines"
 MAIL_BIN="node $SHARED_DIR/scripts/mail.mjs"
