@@ -61,9 +61,21 @@ check_pipeline() {
   # Check if due
   last_run=$(python3 -c "import json; d=json.load(open('$state_file')); print(d.get('last_run',''))" 2>/dev/null || echo "")
 
+  # Helper: write last_run=NOW to state.json and launch the pipeline
+  launch_pipeline() {
+    python3 -c "
+import json, datetime
+p = '$state_file'
+with open(p) as f: d = json.load(f)
+d['last_run'] = datetime.datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%SZ')
+with open(p, 'w') as f: json.dump(d, f, indent=2)
+" 2>/dev/null
+    bash "$run_script"
+  }
+
   if [ -z "$last_run" ] || [ "$last_run" = "null" ]; then
     log "$name: never run before, launching now"
-    bash "$run_script"
+    launch_pipeline
     return
   fi
 
@@ -81,7 +93,7 @@ check_pipeline() {
 
   if [ "$EPOCH" -ge "$next_epoch" ]; then
     log "$name: due (last=$last_run, interval=${interval}h), launching"
-    bash "$run_script"
+    launch_pipeline
   else
     local remaining=$(( (next_epoch - EPOCH) / 60 ))
     log "$name: not due yet (${remaining}min remaining)"
