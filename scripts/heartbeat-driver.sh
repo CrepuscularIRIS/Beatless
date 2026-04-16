@@ -5,8 +5,8 @@
 # launches due pipelines in tmux, and forwards completed results.
 #
 # Pipelines:
-#   github-hunt:      every 8h  → claude --print "/github-hunt"
-#   blog-maintenance: every 12h → claude --print "/blog-maintenance"
+#   github-pr:        every 2.5h (configured in state.json)
+#   blog-maintenance: every 1h   (configured in state.json)
 
 set -euo pipefail
 
@@ -67,11 +67,17 @@ check_pipeline() {
     return
   fi
 
-  # Calculate if enough time has passed
-  local last_epoch
+  # Calculate if enough time has passed.
+  # Support fractional hours (e.g. 2.5) from state.json.
+  local last_epoch interval_seconds next_epoch
   last_epoch=$(date -d "$last_run" +%s 2>/dev/null || echo "0")
-  local interval_seconds=$((interval * 3600))
-  local next_epoch=$((last_epoch + interval_seconds))
+  interval_seconds=$(python3 -c "import math; v=float('$interval'); print(max(0, int(v*3600)))" 2>/dev/null || echo "0")
+  next_epoch=$((last_epoch + interval_seconds))
+
+  if [ "$interval_seconds" -le 0 ]; then
+    log "$name: disabled (interval_seconds=$interval_seconds), skipping"
+    return
+  fi
 
   if [ "$EPOCH" -ge "$next_epoch" ]; then
     log "$name: due (last=$last_run, interval=${interval}h), launching"
@@ -109,6 +115,6 @@ check_results() {
 # Main
 log "=== heartbeat tick ==="
 check_results
-check_pipeline "github-hunt"
+check_pipeline "github-pr"
 check_pipeline "blog-maintenance"
 log "=== heartbeat done ==="

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Auto PR Pipeline — runs on heartbeat, discovers and submits PRs
-# Replaces github-hunt. Interval: 30min (controlled by cron)
+# Replaces github-hunt. Interval: 2.5h (controlled by pipeline state + heartbeat)
 set -euo pipefail
 
 TIMESTAMP=$(date -u +"%Y%m%dT%H%M%SZ")
