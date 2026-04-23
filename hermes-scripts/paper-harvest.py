@@ -140,34 +140,89 @@ def parse_arxiv_entry(entry, ns):
     }
 
 
-def fetch_arxiv_new(max_per_cat=15):
-    """arXiv listings, newest first per category. Filter to EARLIEST_YEAR+."""
+def _collect_arxiv_search(search_url, ns):
+    """Run a single arXiv search URL, return list of parsed entries."""
+    try:
+        xml_text = http_get(search_url, timeout=30)
+    except Exception as e:
+        print(f"arxiv query failed: {e}")
+        return []
+    root = ET.fromstring(xml_text)
+    out = []
+    for entry in root.findall("atom:entry", ns):
+        try:
+            p = parse_arxiv_entry(entry, ns)
+        except Exception:
+            continue
+        if p["arxiv_id"]:
+            out.append(p)
+    return out
+
+
+def fetch_arxiv_new(max_per_cat=15, year_min=None):
+    """arXiv listings, newest first per category. Filter to year_min+ (default EARLIEST_YEAR)."""
     ns = {"atom": "http://www.w3.org/2005/Atom", "arxiv": "http://arxiv.org/schemas/atom"}
+    ymin = year_min if year_min is not None else EARLIEST_YEAR
     collected = []
     for cat in ARXIV_CATS:
         q = urllib.parse.quote(f"cat:{cat}")
         url = (f"https://export.arxiv.org/api/query?search_query={q}"
                f"&sortBy=submittedDate&sortOrder=descending&max_results={max_per_cat}")
-        try:
-            xml_text = http_get(url, timeout=30)
-        except Exception as e:
-            print(f"arxiv {cat}: fetch failed {e}")
-            time.sleep(3)
-            continue
-        root = ET.fromstring(xml_text)
-        for entry in root.findall("atom:entry", ns):
-            try:
-                p = parse_arxiv_entry(entry, ns)
-            except Exception:
-                continue
-            if not p["arxiv_id"]:
-                continue
+        entries = _collect_arxiv_search(url, ns)
+        for p in entries:
             year = int(p["published"][:4]) if p["published"] else 0
-            if year < EARLIEST_YEAR:
+            if year < ymin:
                 continue
+            p["_topic"] = cat
             collected.append(p)
-        time.sleep(3)  # arXiv rate limit courtesy
-    # de-dup within one run
+        time.sleep(3)
+    seen = set()
+    uniq = []
+    for p in collected:
+        if p["arxiv_id"] in seen:
+            continue
+        seen.add(p["arxiv_id"])
+        uniq.append(p)
+    return uniq
+
+
+def fetch_arxiv_queries(queries, year_min=2026, per_query_limit=20, cats=None):
+    """Run a batch of keyword queries against arXiv.
+
+    Args:
+        queries: list of (topic_tag, query_string) tuples.
+                 topic_tag becomes a Zotero tag on the item.
+                 query_string uses arXiv search grammar,
+                 e.g. 'abs:"weak-to-strong" AND cat:cs.LG'.
+        year_min: drop papers before this year.
+        per_query_limit: max results per query (arXiv caps at 2000).
+        cats: optional list of cats to AND into each query.
+              e.g. ["cs.LG","cs.CL","cs.CV","cs.AI"].
+
+    Returns list of parsed entries, each with `_topic` field set.
+    """
+    ns = {"atom": "http://www.w3.org/2005/Atom", "arxiv": "http://arxiv.org/schemas/atom"}
+    collected = []
+    for tag, raw_query in queries:
+        q = raw_query
+        if cats:
+            cat_clause = " OR ".join(f"cat:{c}" for c in cats)
+            q = f"({raw_query}) AND ({cat_clause})"
+        encoded = urllib.parse.quote(q)
+        url = (f"https://export.arxiv.org/api/query?search_query={encoded}"
+               f"&sortBy=submittedDate&sortOrder=descending&max_results={per_query_limit}")
+        entries = _collect_arxiv_search(url, ns)
+        kept = 0
+        for p in entries:
+            year = int(p["published"][:4]) if p["published"] else 0
+            if year < year_min:
+                continue
+            p["_topic"] = tag
+            collected.append(p)
+            kept += 1
+        print(f"   query[{tag}] raw={len(entries)} kept={kept}")
+        time.sleep(4)  # be nicer than the 3s default — bulk runs
+    # dedup within run
     seen = set()
     uniq = []
     for p in collected:
@@ -179,6 +234,10 @@ def fetch_arxiv_new(max_per_cat=15):
 
 
 def arxiv_to_zotero_item(p):
+    tags = [{"tag": "auto-harvest"}, {"tag": "arxiv"}]
+    tags += [{"tag": c} for c in p.get("cats", [])[:3]]
+    if p.get("_topic"):
+        tags.append({"tag": f"topic:{p['_topic']}"})
     return {
         "itemType": "preprint",
         "title": p["title"],
@@ -189,8 +248,7 @@ def arxiv_to_zotero_item(p):
         "url": f"https://arxiv.org/abs/{p['arxiv_id']}",
         "date": p["published"],
         "libraryCatalog": "arXiv.org",
-        "tags": [{"tag": "auto-harvest"}, {"tag": "arxiv"}] +
-                [{"tag": c} for c in p["cats"][:3]],
+        "tags": tags,
         "collections": [AUTO_HARVEST_COLLECTION],
     }
 
