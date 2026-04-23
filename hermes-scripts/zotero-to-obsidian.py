@@ -172,11 +172,16 @@ def render_note(item, citekey):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--force", action="store_true", help="regenerate even if note exists")
-    ap.add_argument("--collection", default=None,
-                    help="only sync one collection (key); default = whole library")
+    # Default to A-Tier collection so cron runs pull quality-guaranteed papers only.
+    # Pass "" or "ALL" to sync whole library.
+    ap.add_argument("--collection", default="5CD5RDNA",
+                    help="collection key (default '5CD5RDNA' = A-Tier). "
+                         "Pass 'ALL' to sync entire library.")
     ap.add_argument("--limit", type=int, default=0,
                     help="stop after N items (debug)")
     args = ap.parse_args()
+    if (args.collection or "").upper() == "ALL":
+        args.collection = None
 
     if not ZOT_KEY or not ZOT_USER:
         print("ERROR: ZOTERO_API_KEY / ZOTERO_USER_ID must be exported")

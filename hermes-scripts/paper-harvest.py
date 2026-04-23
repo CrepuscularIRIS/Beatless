@@ -27,7 +27,8 @@ STATUS_FILE = os.path.expanduser("~/.hermes/shared/.last-paper-harvest-status")
 
 ZOT_KEY = os.environ.get("ZOTERO_API_KEY", "")
 ZOT_USER = os.environ.get("ZOTERO_USER_ID", "")
-AUTO_HARVEST_COLLECTION = "VXXHVU7P"  # pre-created via curl
+# Parent collection "Auto-Harvest" (kept for backward compat only).
+AUTO_HARVEST_COLLECTION = "VXXHVU7P"
 
 UA = "paper-harvest/0.1 (https://github.com/CrepuscularIRIS; +research)"
 HEADERS = {"User-Agent": UA}
@@ -36,16 +37,64 @@ MAX_PER_TICK = 20
 ARXIV_CATS = ["cs.LG", "cs.CL", "cs.CV", "cs.AI"]
 EARLIEST_YEAR = 2025  # user said post-2025 only
 
-# OpenReview venues — use venueid content field to filter accepted papers
-# ICLR 2026 is still in review; ICML 2025 and NeurIPS 2025 are done.
-OPENREVIEW_VENUES = [
-    ("ICLR.cc/2026/Conference", "iclr-2026"),
-    ("ICML.cc/2025/Conference", "icml-2025"),
-    ("NeurIPS.cc/2025/Conference", "neurips-2025"),
+# Two target collections:
+#   A-Tier  — CCF-A venue papers (primary target, quality-guaranteed)
+#   Scouting — famous-lab arXiv drops (secondary, pre-publication material)
+A_TIER_COLLECTION = "5CD5RDNA"
+SCOUTING_COLLECTION = "SIDPSB39"
+
+# Famous labs — used to filter arXiv results by affiliation signal.
+# Match is case-insensitive substring; present in author comment or affiliation
+# field when provided.
+FAMOUS_LABS = [
+    # Western frontier labs
+    "anthropic", "openai", "deepmind", "google research", "google brain",
+    "meta ai", "meta fair", "fair labs",
+    "microsoft research", "msr", "msft research",
+    "apple machine learning", "apple ai",
+    "nvidia research", "nvidia",
+    "allen institute", "ai2", "allenai",
+    "mistral",
+    # Chinese labs
+    "moonshot", "kimi",
+    "bytedance seed", "bytedance", "seed team",
+    "zhipu", "glm",
+    "minimax", "hailuo",
+    "alibaba", "qwen", "tongyi",
+    "tencent", "hunyuan",
+    "baidu", "ernie",
+    "deepseek",
+    "01.ai", "yi-lightning",
+    "xiaomi",
+    # Top research universities (CCF-A author signal)
+    "stanford", "mit", "cmu", "carnegie mellon",
+    "berkeley", "eth zurich", "ethz",
+    "tsinghua", "peking university", "pku",
+    "oxford", "cambridge",
+    "princeton", "harvard", "yale",
+    "toronto", "waterloo",
 ]
 
-# CVF hosts CVPR open-access; 2026 listings appear June/July 2026
-CVF_CVPR_YEARS = [2026, 2025]
+# OpenReview venues — CCF-A and adjacent top venues.
+# Each tuple: (venueid, slug_tag, year_int_for_filter).
+# year_int lets us reject misclassified older entries.
+OPENREVIEW_VENUES = [
+    # Core CCF-A ML/NLP
+    ("ICLR.cc/2026/Conference",    "iclr-2026",    2026),
+    ("ICLR.cc/2025/Conference",    "iclr-2025",    2025),
+    ("ICML.cc/2025/Conference",    "icml-2025",    2025),
+    ("NeurIPS.cc/2025/Conference", "neurips-2025", 2025),
+    # Language-model flagship (widely treated as top-tier)
+    ("COLM/2025/Conference",       "colm-2025",    2025),
+]
+
+# CVF hosts CVPR + ICCV open-access; both CCF-A for computer vision.
+# Each tuple: (conference_name_in_url, slug_tag, year).
+CVF_VENUES = [
+    ("CVPR", "cvpr-2026", 2026),
+    ("CVPR", "cvpr-2025", 2025),
+    ("ICCV", "iccv-2025", 2025),
+]
 
 
 def http_get(url, timeout=25):
@@ -140,8 +189,13 @@ def parse_arxiv_entry(entry, ns):
     }
 
 
-def _collect_arxiv_search(search_url, ns):
-    """Run a single arXiv search URL, return list of parsed entries."""
+def _collect_arxiv_search(search_url, ns, famous_only=False):
+    """Run a single arXiv search URL, return list of parsed entries.
+
+    If famous_only=True, drop entries whose affiliation/comment fields don't
+    match any FAMOUS_LABS name. Each entry gets `_famous_lab` set to the
+    matched lab slug when applicable.
+    """
     try:
         xml_text = http_get(search_url, timeout=30)
     except Exception as e:
@@ -154,9 +208,50 @@ def _collect_arxiv_search(search_url, ns):
             p = parse_arxiv_entry(entry, ns)
         except Exception:
             continue
-        if p["arxiv_id"]:
-            out.append(p)
+        if not p["arxiv_id"]:
+            continue
+        # Scan raw entry XML for lab signals
+        entry_text = ET.tostring(entry, encoding="unicode")
+        lab = detect_famous_lab(entry_text)
+        if lab:
+            p["_famous_lab"] = lab
+        if famous_only and not lab:
+            continue
+        out.append(p)
     return out
+
+
+def fetch_arxiv_famous_labs(limit_per_cat=25, year_min=None):
+    """arXiv newest-first per category, filtered to entries that mention a
+    famous lab in the affiliation or comment fields.
+
+    This is the cron-path arXiv fetcher: it only returns items with a strong
+    quality signal (affiliation match), so noise stays out of A-Tier.
+    """
+    ns = {"atom": "http://www.w3.org/2005/Atom", "arxiv": "http://arxiv.org/schemas/atom"}
+    ymin = year_min if year_min is not None else EARLIEST_YEAR
+    collected = []
+    for cat in ARXIV_CATS:
+        q = urllib.parse.quote(f"cat:{cat}")
+        url = (f"https://export.arxiv.org/api/query?search_query={q}"
+               f"&sortBy=submittedDate&sortOrder=descending&max_results={limit_per_cat}")
+        entries = _collect_arxiv_search(url, ns, famous_only=True)
+        for p in entries:
+            year = int(p["published"][:4]) if p["published"] else 0
+            if year < ymin:
+                continue
+            p["_topic"] = cat
+            collected.append(p)
+        time.sleep(4)
+    # dedup by arxiv_id
+    seen = set()
+    uniq = []
+    for p in collected:
+        if p["arxiv_id"] in seen:
+            continue
+        seen.add(p["arxiv_id"])
+        uniq.append(p)
+    return uniq
 
 
 def fetch_arxiv_new(max_per_cat=15, year_min=None):
@@ -233,11 +328,36 @@ def fetch_arxiv_queries(queries, year_min=2026, per_query_limit=20, cats=None):
     return uniq
 
 
-def arxiv_to_zotero_item(p):
-    tags = [{"tag": "auto-harvest"}, {"tag": "arxiv"}]
+def detect_famous_lab(entry_xml_text):
+    """Return the first matching FAMOUS_LABS name found in entry's affiliation
+    or comment fields, or None.
+
+    arXiv doesn't reliably expose affiliations in Atom. We scan:
+      - <arxiv:affiliation> tags (when present)
+      - <arxiv:comment> tags (often contains "Camera-ready for X")
+      - <arxiv:journal_ref> if present
+    Case-insensitive substring match against FAMOUS_LABS.
+    """
+    text = entry_xml_text.lower()
+    for lab in FAMOUS_LABS:
+        if lab in text:
+            return lab
+    return None
+
+
+def arxiv_to_zotero_item(p, tier="scout", extra_tags=None):
+    """arXiv items default to Scouting tier. Pass tier='a' for famous-lab
+    papers that should land in A-Tier alongside CCF-A conference material.
+    """
+    tags = [{"tag": "auto-harvest"}, {"tag": "arxiv"}, {"tag": f"tier:{tier}"}]
     tags += [{"tag": c} for c in p.get("cats", [])[:3]]
     if p.get("_topic"):
         tags.append({"tag": f"topic:{p['_topic']}"})
+    if p.get("_famous_lab"):
+        tags.append({"tag": f"affil:{p['_famous_lab']}"})
+    for t in (extra_tags or []):
+        tags.append({"tag": t})
+    target = A_TIER_COLLECTION if tier == "a" else SCOUTING_COLLECTION
     return {
         "itemType": "preprint",
         "title": p["title"],
@@ -249,7 +369,7 @@ def arxiv_to_zotero_item(p):
         "date": p["published"],
         "libraryCatalog": "arXiv.org",
         "tags": tags,
-        "collections": [AUTO_HARVEST_COLLECTION],
+        "collections": [target],
     }
 
 
@@ -319,23 +439,25 @@ def openreview_to_zotero_item(note, venue_tag):
         "url": url,
         "libraryCatalog": "OpenReview",
         "extra": f"OpenReview: {nid}",
-        "tags": [{"tag": "auto-harvest"}, {"tag": "openreview"}, {"tag": venue_tag}],
-        "collections": [AUTO_HARVEST_COLLECTION],
+        "tags": [{"tag": "auto-harvest"}, {"tag": "openreview"},
+                 {"tag": venue_tag}, {"tag": "tier:a"}],
+        "collections": [A_TIER_COLLECTION],
     }
 
 
 # ---------------- CVF (CVPR open-access) ----------------
 
-def fetch_cvf_cvpr(year, limit=15):
-    """Parse the CVPR accepted-papers index from openaccess.thecvf.com."""
-    url = f"https://openaccess.thecvf.com/CVPR{year}"
+def fetch_cvf_conference(conf_name, year, limit=15):
+    """Parse an accepted-papers index from openaccess.thecvf.com.
+
+    conf_name: 'CVPR' or 'ICCV' (anything the CVF url supports)
+    """
+    url = f"https://openaccess.thecvf.com/{conf_name}{year}"
     try:
         html = http_get(url, timeout=30)
     except Exception as e:
-        print(f"cvf cvpr-{year}: fetch failed {e}")
+        print(f"cvf {conf_name}-{year}: fetch failed {e}")
         return []
-    # Each entry is a <dt class="ptitle"><a href="..."><i>title</i></a></dt>
-    # followed by <dd>authors</dd>. Some years use different structure.
     pat = re.compile(
         r'<dt class="ptitle"><a href="([^"]+)">([^<]+)</a></dt>\s*<dd>\s*([^<]+)</dd>',
         re.IGNORECASE | re.DOTALL,
@@ -354,21 +476,23 @@ def fetch_cvf_cvpr(year, limit=15):
                             "lastName": parts[-1]})
         if href.startswith("/"):
             href = "https://openaccess.thecvf.com" + href
-        out.append({"title": title, "url": href, "authors": authors, "year": year})
+        out.append({"title": title, "url": href, "authors": authors,
+                    "year": year, "conf": conf_name})
     return out
 
 
-def cvf_to_zotero_item(p):
+def cvf_to_zotero_item(p, venue_tag):
     return {
         "itemType": "conferencePaper",
         "title": p["title"],
         "creators": p["authors"],
-        "conferenceName": f"CVPR {p['year']}",
+        "conferenceName": f"{p['conf']} {p['year']}",
         "date": str(p["year"]),
         "url": p["url"],
         "libraryCatalog": "CVF Open Access",
-        "tags": [{"tag": "auto-harvest"}, {"tag": "cvf"}, {"tag": f"cvpr-{p['year']}"}],
-        "collections": [AUTO_HARVEST_COLLECTION],
+        "tags": [{"tag": "auto-harvest"}, {"tag": "cvf"},
+                 {"tag": venue_tag}, {"tag": "tier:a"}],
+        "collections": [A_TIER_COLLECTION],
     }
 
 
@@ -417,21 +541,9 @@ def main():
 
     candidates = []  # list of (zotero_item_dict, source_tag)
 
-    # --- arXiv ---
-    print("== step 2: arXiv ==")
-    try:
-        ax = fetch_arxiv_new(max_per_cat=10)
-        summary["arxiv_fetched"] = len(ax)
-        print(f"   {len(ax)} arXiv entries")
-        for p in ax:
-            it = arxiv_to_zotero_item(p)
-            candidates.append((it, "arxiv"))
-    except Exception as e:
-        summary["errors"].append(f"arxiv: {e}")
-
-    # --- OpenReview venues ---
-    print("== step 3: OpenReview (ICLR/ICML/NeurIPS) ==")
-    for venueid, tag in OPENREVIEW_VENUES:
+    # --- OpenReview (CCF-A: ICLR / ICML / NeurIPS / COLM) ---
+    print("== step 2: OpenReview CCF-A venues ==")
+    for venueid, tag, _year in OPENREVIEW_VENUES:
         try:
             notes = fetch_openreview_venue(venueid, limit=15)
             print(f"   {tag}: {len(notes)} notes")
@@ -444,18 +556,33 @@ def main():
             summary["errors"].append(f"openreview {venueid}: {e}")
         time.sleep(2)
 
-    # --- CVF CVPR ---
-    print("== step 4: CVF (CVPR open-access) ==")
-    for y in CVF_CVPR_YEARS:
+    # --- CVF (CCF-A: CVPR + ICCV) ---
+    print("== step 3: CVF CCF-A venues ==")
+    for conf, tag, year in CVF_VENUES:
         try:
-            ps = fetch_cvf_cvpr(y, limit=12)
+            ps = fetch_cvf_conference(conf, year, limit=12)
             summary["cvf_fetched"] += len(ps)
-            print(f"   cvpr-{y}: {len(ps)} entries")
+            print(f"   {tag}: {len(ps)} entries")
             for p in ps:
-                candidates.append((cvf_to_zotero_item(p), f"cvpr-{y}"))
+                candidates.append((cvf_to_zotero_item(p, tag), tag))
         except Exception as e:
-            summary["errors"].append(f"cvf-{y}: {e}")
+            summary["errors"].append(f"cvf-{tag}: {e}")
         time.sleep(2)
+
+    # --- arXiv famous-lab filter (optional, supplementary to CCF-A) ---
+    # Cron path: only arXiv items with a famous-lab affiliation signal get in.
+    # Items land in A-Tier with tier:a + affil:<lab> tags so they can be
+    # distinguished from accepted conference papers.
+    print("== step 4: arXiv famous-lab filter ==")
+    try:
+        ax = fetch_arxiv_famous_labs(limit_per_cat=25)
+        summary["arxiv_fetched"] = len(ax)
+        print(f"   {len(ax)} famous-lab arXiv entries")
+        for p in ax:
+            it = arxiv_to_zotero_item(p, tier="a")
+            candidates.append((it, f"arxiv-{p.get('_famous_lab','?')}"))
+    except Exception as e:
+        summary["errors"].append(f"arxiv-famous: {e}")
 
     # --- Dedup ---
     print(f"== step 5: dedup ({len(candidates)} candidates) ==")

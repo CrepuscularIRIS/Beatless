@@ -239,10 +239,8 @@ def _fetch_issue_comments(repo, issue_number):
         return []
 
 
-# GitHub author_association values that indicate a maintainer voice
-MAINTAINER_ROLES = {"OWNER", "MEMBER", "COLLABORATOR"}
-
-# Labels that indicate the issue should not be worked on
+# Labels that block contribution — DETERMINISTIC match, stays in Python.
+# For dispute / AI-policy / claim interpretation, see pr-direction-check skill.
 BLOCK_LABELS = {
     "wontfix", "won't fix", "wont fix",
     "invalid", "duplicate",
@@ -253,79 +251,13 @@ BLOCK_LABELS = {
     "question", "stale",
 }
 
-# Keyword patterns that indicate maintainer pushback/dispute
-DISPUTE_PATTERNS = [
-    # explicit rejection
-    r"\b(won['']?t fix|wontfix|not going to (fix|accept|merge|do))\b",
-    r"\b(will not|won['']?t) (be )?(fix|merge|accept|accepted|added)",
-    r"\b(closing|close) (this|the) (issue|pr)\b",
-    # skepticism about premise
-    r"\bi (don['']?t|do not) (see|think|believe) (why|how|this|any reason)",
-    r"\bnot sure (what|why|if) (you|this)",
-    r"\bthis is (not|already) (a bug|broken|disputed|done|fixed)",
-    r"\balready (disputed|discussed|rejected|decided|resolved)",
-    r"\bno (real )?reason (to|we should)",
-    # maintainer redirection (out-of-scope signals)
-    r"\bwe don['']?t (want|need|plan) (this|to)",
-    r"\bout of scope\b",
-    r"\bby design\b",
-    r"\bintentional\b.*\bbehavior\b",
-]
-
-
-def has_existing_claim(repo, issue_number, comments=None):
-    """True if someone else already commented 'I'll work on this' or similar.
-
-    Only flags when the claimer is NOT the harvest author. We do NOT require
-    maintainer-role here — a fellow contributor claiming the issue is enough
-    to yield.
-    """
-    if comments is None:
-        comments = _fetch_issue_comments(repo, issue_number)
-    claim_patterns = [
-        r"\bi.{0,3}ll (take|work on|pick.{0,3}up|handle)",
-        r"\bi.{0,3}m working on",
-        r"\bworking on (this|it)\b",
-        r"\b/assign\b",
-        r"\bcan i (take|work on)",
-    ]
-    for c in comments:
-        login = c.get("login", "")
-        if login == AUTHOR:
-            continue
-        body = (c.get("body") or "").lower()
-        for pat in claim_patterns:
-            if re.search(pat, body):
-                return True
-    return False
-
-
-def has_maintainer_dispute(repo, issue_number, comments=None):
-    """True if a maintainer has expressed skepticism / rejection on the issue.
-
-    This is the gate aiohttp#12413 bypassed. Scans comments authored by
-    OWNER / MEMBER / COLLABORATOR roles for dispute patterns. Returns
-    (bool, evidence_snippet).
-    """
-    if comments is None:
-        comments = _fetch_issue_comments(repo, issue_number)
-    for c in comments:
-        role = (c.get("author_association") or "").upper()
-        if role not in MAINTAINER_ROLES:
-            continue
-        body = (c.get("body") or "").lower()
-        for pat in DISPUTE_PATTERNS:
-            m = re.search(pat, body)
-            if m:
-                # extract a window around the match as evidence
-                start = max(0, m.start() - 40)
-                end = min(len(body), m.end() + 60)
-                return True, f"@{c.get('login','?')} ({role}): …{body[start:end].strip()}…"
-    return False, ""
-
 
 def has_block_label(issue):
-    """True if issue carries a label that blocks contribution (wontfix, invalid, etc.)."""
+    """True if issue carries a label that blocks contribution (wontfix, invalid, etc.).
+
+    Deterministic label string match. Judgment calls (dispute detection,
+    stale-but-still-valid) are deferred to pr-direction-check skill.
+    """
     for lbl in issue.get("labels", []):
         name = (lbl.get("name") if isinstance(lbl, dict) else str(lbl)).strip().lower()
         if name in BLOCK_LABELS:
@@ -336,12 +268,17 @@ def has_block_label(issue):
 def preflight_filter(issues):
     """Return (approved, rejected) tuples with reasons.
 
-    Hard gates, in order:
-      1. Repo forbids AI (policy scan)
-      2. Issue has block-label (wontfix / invalid / needs-design / etc.)
-      3. Duplicate open PR already references this issue
-      4. Another contributor already claimed this issue
-      5. A maintainer disputed the issue premise in comments
+    ONLY DETERMINISTIC GATES run here. Judgment calls (dispute detection,
+    AI-policy interpretation, claim-recency reading) are deferred to the
+    pr-direction-check skill, invoked downstream by /github-pr Phase 2.5.
+
+    Deterministic gates, in order:
+      1. Issue has block-label (wontfix / invalid / needs-design / etc.)
+      2. Duplicate open PR already references this issue (Fixes/Closes/Resolves #N)
+      3. Contributing.md exists check (info only — the skill will READ it)
+
+    Passing preflight means the issue is worth spending the claude -p session
+    on; the session itself runs pr-direction-check for the nuanced verdict.
     """
     cache = load_policy_cache()
     approved = []
@@ -351,36 +288,23 @@ def preflight_filter(issues):
         repo = issue["repository"]["nameWithOwner"]
         number = issue["number"]
 
-        # Gate 1: repo AI policy
-        policy = check_repo_policy(repo, cache)
-        if policy["forbids_ai"]:
-            rejected.append((issue, f"AI-forbidden repo. Evidence: {policy['ai_evidence']}"))
-            continue
-
-        # Gate 2: block-label on the issue
+        # Gate 1: block-label — deterministic
         blocked, lbl = has_block_label(issue)
         if blocked:
             rejected.append((issue, f"Issue has block-label '{lbl}'"))
             continue
 
-        # Gate 3: duplicate open PR
+        # Gate 2: duplicate open PR — deterministic `Fixes #N` grep
         if has_duplicate_pr(repo, number):
             rejected.append((issue, f"Open PR already references #{number}"))
             continue
 
-        # Gates 4 + 5 share the same comment fetch — do it once
+        # Gather the data the skill will judge — but don't judge here.
+        # Cache fetched data on the issue so the prompt can pass it along.
+        policy = check_repo_policy(repo, cache)  # fetches CONTRIBUTING.md text
         comments = _fetch_issue_comments(repo, number)
-
-        if has_existing_claim(repo, number, comments=comments):
-            rejected.append((issue, f"Another contributor already claimed #{number}"))
-            continue
-
-        disputed, evidence = has_maintainer_dispute(repo, number, comments=comments)
-        if disputed:
-            rejected.append((issue, f"Maintainer disputed the issue: {evidence}"))
-            continue
-
         issue["_policy"] = policy
+        issue["_comments"] = comments[-20:]  # last 20 for the skill
         approved.append(issue)
 
     save_policy_cache(cache)
@@ -392,11 +316,14 @@ def extract_pr_url(text):
     return match.group(0) if match else None
 
 
-def write_status(status, detail=""):
+def write_status(status, detail="", extra=None):
     os.makedirs(os.path.dirname(STATUS_FILE), exist_ok=True)
     ts = datetime.now(timezone.utc).isoformat()
+    payload = {"status": status, "detail": detail, "timestamp": ts}
+    if extra:
+        payload.update(extra)
     with open(STATUS_FILE, "w") as f:
-        json.dump({"status": status, "detail": detail, "timestamp": ts}, f)
+        json.dump(payload, f)
 
 
 def main():
@@ -440,42 +367,68 @@ def main():
         )
     issue_list = "\n".join(issue_lines)
 
+    # Build the direction-check input blob for each candidate — the skill
+    # reads this to make the judgment call Python can't reliably make.
+    issue_blobs = []
+    for issue in approved:
+        pol = issue.get("_policy", {})
+        comments = issue.get("_comments", [])
+        blob = {
+            "repo": issue["repository"]["nameWithOwner"],
+            "issue_number": issue["number"],
+            "issue_title": issue.get("title", ""),
+            "labels": [(l.get("name") if isinstance(l, dict) else str(l))
+                       for l in issue.get("labels", [])],
+            "last_comments": [
+                {"author": c.get("login"),
+                 "role": c.get("author_association"),
+                 "body": (c.get("body") or "")[:1500]}
+                for c in comments
+            ],
+            "contributing_md_present": pol.get("has_contributing", False),
+            "needs_cla_signal": pol.get("needs_cla", False),
+        }
+        issue_blobs.append(blob)
+
+    direction_blob_json = json.dumps(issue_blobs, ensure_ascii=False, indent=2)[:8000]
+
     prompt = (
         f"/github-pr\n\n"
-        f"Candidate issues (preflight-approved):\n\n"
+        f"Candidate issues (preflight-approved — block-label + duplicate-PR gates passed):\n\n"
         f"{issue_list}\n\n"
+        f"DIRECTION-CHECK INPUT (judgment data — consume via pr-direction-check skill):\n"
+        f"```json\n{direction_blob_json}\n```\n\n"
         f"Routing anchors (must follow exactly):\n"
         f"- Workspace root: {WORKSPACE}\n"
         f"- Contribution repos: {CONTRIB_ROOT}/<repo-name>/\n"
         f"- Planning-with-Files root: {PR_STAGE_ROOT}/<repo-name>/\n"
         f"- Required files: task_plan.md, findings.md, progress.md\n"
-        f"- PR report: {PR_STAGE_ROOT}/<repo-name>/pr-report.md\n"
-        f"- Superpowers plans (repo-local): <repo-root>/docs/superpowers/plans/\n\n"
-        f"HARD-FAIL GATES (abort the issue if any trigger):\n"
-        f"1. Open and READ the repo's CONTRIBUTING.md before writing code. If it forbids AI\n"
-        f"   assistance in any form (e.g. 'no AI-generated code', 'LLM output prohibited'),\n"
-        f"   skip this issue and log a 'repo-forbids-ai' rejection. Do NOT submit anyway.\n"
-        f"2. If the issue flag shows CLA-REQUIRED, verify the CLA bot and sign the CLA BEFORE\n"
-        f"   pushing. If you cannot sign (manual step), skip the issue and log 'cla-blocked'.\n"
-        f"3. Re-check for duplicate PRs right before `gh pr create`. If someone opened a PR\n"
-        f"   since preflight, close yours with a courteous note yielding to theirs.\n\n"
+        f"- PR report: {PR_STAGE_ROOT}/<repo-name>/pr-report.md\n\n"
+        f"MANDATORY FIRST STEP — Phase 2.5 direction check:\n"
+        f"For each candidate, invoke Skill(\"pr-direction-check\") with the matching\n"
+        f"blob above. The skill returns DIRECTION_VERDICT: <status> | <reason>.\n"
+        f"- proceed → continue to clone + code\n"
+        f"- block:* → emit PIPELINE_RESULT with the matching status, skip this candidate\n"
+        f"- yield:* → emit PIPELINE_RESULT: duplicate | <reason>, skip\n"
+        f"- ambiguous:* → STOP, emit PIPELINE_RESULT: needs-human | <reason>, do NOT\n"
+        f"  submit anything. Surface the ambiguity in the final report so a human decides.\n\n"
+        f"FINAL-SUBMISSION GATES (re-check right before `gh pr create`):\n"
+        f"1. Duplicate check — a PR may have opened in the last hour; if so, close your\n"
+        f"   branch with a polite yield.\n"
+        f"2. If CLA required and unsigned: emit PIPELINE_RESULT: cla-blocked.\n\n"
         f"REPLY / PR-BODY TONE (non-negotiable):\n"
-        f"- Humility over cleverness. Use phrases like 'I might be wrong, but...',\n"
+        f"- Humility over cleverness. Use 'I might be wrong, but...',\n"
         f"  'If this direction doesn't fit, no problem.'\n"
-        f"- Never mention internal tooling: no agent names, no multi-model pipelines,\n"
-        f"  no orchestration systems, no 'my analysis shows'.\n"
-        f"- Match the project's language (terminology, style, commit format) exactly.\n"
-        f"- Include the AI Disclosure line per PullRequest.md: a short factual note that\n"
-        f"  AI tools assisted, manually reviewed and tested.\n"
+        f"- No internal tooling references (agent names, orchestration, 'my analysis shows').\n"
+        f"- Match the project's language. AI disclosure per PullRequest.md §AI Disclosure.\n"
         f"- No status tables, no bolded usernames, no emoji-headed sections.\n\n"
-        f"Before implementation, ensure planning files exist in pr-stage for the selected repo.\n"
-        f"Use codex:codex-rescue for implementation.\n"
-        f"Use gemini:gemini-consult for architecture checks. If Gemini startup is slow, allow warm-up and retry once.\n"
-        f"Pick the most suitable issue and execute the full pipeline.\n\n"
-        f"IMPORTANT: At the end of your work, print a summary line in this exact format:\n"
+        f"Use codex:codex-rescue for implementation; gemini:gemini-consult for architecture.\n"
+        f"Pick the most suitable proceed-verdict candidate and execute the full pipeline.\n\n"
+        f"IMPORTANT: At the end, print in this exact format:\n"
         f"PIPELINE_RESULT: <status> | <pr_url_or_reason>\n"
-        f"Where status is one of: pr-created, pr-failed, issue-skipped, repo-forbids-ai, cla-blocked, duplicate, error\n"
-        f"Example: PIPELINE_RESULT: pr-created | https://github.com/org/repo/pull/123"
+        f"PIPELINE_QUALITY_SCORE: <float 0-10>   # mean of triple-review; required when status=pr-created\n\n"
+        f"Status values: pr-created, pr-failed, issue-skipped, needs-human,\n"
+        f"repo-forbids-ai, cla-blocked, duplicate, maintainer-disputed, error"
     )
 
     result = subprocess.run(
@@ -507,13 +460,34 @@ def main():
 
     pr_url = extract_pr_url(stdout)
     pipeline_match = re.search(r'PIPELINE_RESULT:\s*(\S+)\s*\|\s*(.*)', stdout)
+    score_match = re.search(r'PIPELINE_QUALITY_SCORE:\s*([0-9]+(?:\.[0-9]+)?)', stdout)
+    score = float(score_match.group(1)) if score_match else None
+
+    QUALITY_THRESHOLD = 7.0
 
     if pipeline_match:
         status = pipeline_match.group(1).strip()
         detail = pipeline_match.group(2).strip()
-        write_status(status, detail)
+
+        # Quality-score enforcement: if status claims pr-created, require a
+        # score ≥ threshold. Block the "success" classification otherwise.
+        if status == "pr-created":
+            if score is None:
+                status = "pr-created-unscored"
+                detail = f"SCORE MISSING — original detail: {detail}"
+            elif score < QUALITY_THRESHOLD:
+                status = "quality-blocked"
+                detail = f"score={score} < {QUALITY_THRESHOLD} — original: {detail}"
+            else:
+                detail = f"{detail}  [quality={score}]"
+        extra = {"quality_score": score} if score is not None else {}
+        write_status(status, detail, extra=extra)
     elif pr_url:
-        write_status("pr-created", pr_url)
+        if score is None or score < QUALITY_THRESHOLD:
+            write_status("pr-created-unscored" if score is None else "quality-blocked",
+                         pr_url, extra={"quality_score": score} if score is not None else {})
+        else:
+            write_status("pr-created", pr_url, extra={"quality_score": score})
     else:
         write_status("completed-no-pr", stdout[-200:])
 

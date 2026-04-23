@@ -1,148 +1,130 @@
-"""Blog Maintenance — wake-gate + ClaudeCode execution.
+"""Blog Maintenance — AUDIT-ONLY.
 
-Audits ~/claw/blog (Astro site), surfaces:
-  - EN-only posts missing a -zh bilingual pair
-  - Posts older than STALE_DAYS that could be refreshed
+Per roadmap Phase 2.4 decision (2026-04-23):
+  - The blog no longer auto-writes posts from cron.
+  - Writing is human-triggered via /blog-curate (deferred until user
+    hands over the 3-section template spec).
+  - This cron's only job is to produce an audit report that flags:
+      (a) English posts missing their -zh Chinese pair
+      (b) Posts older than STALE_DAYS (60) that might need refresh
 
-Invokes /blog-maintenance with MiniMax model override for the actual writing
-work. The 3-section bilingual template is pending user spec; until it arrives,
-the command relies on the existing writing-anti-ai + MiniMax skill-pack
-defaults and calls out "3-SECTION TEMPLATE: PENDING SPEC" in every prompt so
-the downstream worker doesn't invent its own format.
+The audit file lands at ~/.hermes/shared/.blog-audit.md for human review.
+A tiny status JSON goes to ~/.hermes/shared/.last-blog-maintenance-status.
 
-Working directory: ~/claw/blog
+Does NOT spawn claude -p. Returns {"wakeAgent": false} so Hermes runs
+its own lightweight summary loop rather than a full agent tick.
 """
 import json
 import os
-import subprocess
-from datetime import datetime, timedelta, timezone
+import sys
+from datetime import datetime, timezone
 from pathlib import Path
 
 BLOG_DIR = Path.home() / "claw" / "blog"
 BLOG_POSTS = BLOG_DIR / "src" / "content" / "blogs"
-MARKER = os.path.expanduser("~/.hermes/shared/.last-blog-maintenance")
-STATUS_FILE = os.path.expanduser("~/.hermes/shared/.last-blog-maintenance-status")
 
-STALE_DAYS = 60  # posts older than this are rewrite candidates
-MAX_WORK_PER_TICK = 3  # don't translate more than 3 posts per 12h cron
+AUDIT_MD = Path(os.path.expanduser("~/.hermes/shared/.blog-audit.md"))
+STATUS_JSON = Path(os.path.expanduser("~/.hermes/shared/.last-blog-maintenance-status"))
+
+STALE_DAYS = 60
 
 
 def audit_blog():
-    """Return (missing_zh, stale_posts) two lists sorted by newest first."""
+    """Return (missing_zh_list, stale_list)."""
     if not BLOG_POSTS.exists():
         return [], []
-
     entries = [d for d in BLOG_POSTS.iterdir() if d.is_dir()]
     names = {d.name for d in entries}
 
-    missing_zh = []
-    for d in entries:
-        if d.name.endswith("-zh"):
-            continue
-        if d.name + "-zh" not in names:
-            missing_zh.append(d)
-
-    # sort newest first
+    missing_zh = [d for d in entries
+                  if not d.name.endswith("-zh") and (d.name + "-zh") not in names]
     missing_zh.sort(key=lambda p: p.stat().st_mtime, reverse=True)
 
     now = datetime.now().timestamp()
-    stale_cut = now - STALE_DAYS * 86400
-    stale_posts = [
-        d for d in entries
-        if not d.name.endswith("-zh")
-        and d.stat().st_mtime < stale_cut
+    cut = now - STALE_DAYS * 86400
+    stale = [d for d in entries
+             if not d.name.endswith("-zh") and d.stat().st_mtime < cut]
+    stale.sort(key=lambda p: p.stat().st_mtime)
+    return missing_zh, stale
+
+
+def render_audit_md(missing_zh, stale):
+    """Human-readable report for the user to review before any writing happens."""
+    ts = datetime.now(timezone.utc).isoformat()
+    out = [
+        "# Blog Audit Report",
+        "",
+        f"_Generated: {ts}_",
+        "",
+        f"**Vault**: `{BLOG_POSTS}`",
+        f"**Stale threshold**: {STALE_DAYS} days",
+        "",
+        "## English posts missing a `-zh` Chinese pair",
+        "",
     ]
-    stale_posts.sort(key=lambda p: p.stat().st_mtime)
-
-    return missing_zh, stale_posts
-
-
-def write_status(payload):
-    os.makedirs(os.path.dirname(STATUS_FILE), exist_ok=True)
-    with open(STATUS_FILE, "w") as f:
-        json.dump(payload, f, indent=2, default=str)
+    if missing_zh:
+        out.append(f"{len(missing_zh)} post(s) need translation:")
+        out.append("")
+        for d in missing_zh[:60]:
+            age = int((datetime.now().timestamp() - d.stat().st_mtime) / 86400)
+            out.append(f"- [ ] `{d.name}`  ({age}d old)")
+        if len(missing_zh) > 60:
+            out.append(f"- _…and {len(missing_zh) - 60} more_")
+    else:
+        out.append("_(none — all English posts have `-zh` pairs)_")
+    out += ["", "## Posts older than 60 days (rewrite candidates)", ""]
+    if stale:
+        for d in stale[:60]:
+            age = int((datetime.now().timestamp() - d.stat().st_mtime) / 86400)
+            out.append(f"- [ ] `{d.name}`  ({age}d old)")
+        if len(stale) > 60:
+            out.append(f"- _…and {len(stale) - 60} more_")
+    else:
+        out.append("_(none — blog is fresh)_")
+    out += [
+        "",
+        "---",
+        "",
+        "## What this report is NOT",
+        "",
+        "- This is an audit. No posts are written automatically.",
+        "- To write/translate: open Claude Code, run `/blog-curate` (once implemented),",
+        "  pick an item from this list, get a draft, commit it yourself.",
+        "- The 3-section template for posts is still pending the user's spec.",
+    ]
+    return "\n".join(out) + "\n"
 
 
 def main():
-    os.makedirs(os.path.dirname(MARKER), exist_ok=True)
-
+    AUDIT_MD.parent.mkdir(parents=True, exist_ok=True)
     if not BLOG_DIR.exists():
+        status = {"timestamp": datetime.now(timezone.utc).isoformat(),
+                  "mode": "audit-only", "status": "no-blog-dir",
+                  "blog_dir": str(BLOG_DIR)}
+        STATUS_JSON.write_text(json.dumps(status, indent=2))
         print(json.dumps({"wakeAgent": False}))
-        return
+        return 0
 
-    missing_zh, stale_posts = audit_blog()
-
-    write_status({
+    missing_zh, stale = audit_blog()
+    AUDIT_MD.write_text(render_audit_md(missing_zh, stale))
+    status = {
         "timestamp": datetime.now(timezone.utc).isoformat(),
-        "total_posts": len(list(BLOG_POSTS.iterdir())) if BLOG_POSTS.exists() else 0,
+        "mode": "audit-only",
+        "status": "ok",
+        "blog_dir": str(BLOG_DIR),
+        "audit_md": str(AUDIT_MD),
         "missing_zh_count": len(missing_zh),
-        "stale_count": len(stale_posts),
+        "stale_count": len(stale),
         "stale_days_threshold": STALE_DAYS,
-        "next_translations": [p.name for p in missing_zh[:MAX_WORK_PER_TICK]],
-        "next_rewrites": [p.name for p in stale_posts[:MAX_WORK_PER_TICK]],
-    })
-
-    if not missing_zh and not stale_posts:
-        print(json.dumps({"wakeAgent": False}))
-        return
-
-    translate_list = "\n".join(
-        f"- {p.name}" for p in missing_zh[:MAX_WORK_PER_TICK]
-    ) or "(none)"
-    rewrite_list = "\n".join(
-        f"- {p.name}  ({int((datetime.now().timestamp() - p.stat().st_mtime) / 86400)}d old)"
-        for p in stale_posts[:MAX_WORK_PER_TICK]
-    ) or "(none)"
-
-    prompt = (
-        f"/blog-maintenance\n\n"
-        f"Blog root: {BLOG_DIR}\n"
-        f"Content dir: {BLOG_POSTS}\n\n"
-        f"QUEUE — needs Chinese bilingual pair ({len(missing_zh)} total, top "
-        f"{MAX_WORK_PER_TICK} this tick):\n{translate_list}\n\n"
-        f"QUEUE — older than {STALE_DAYS} days, rewrite candidates "
-        f"({len(stale_posts)} total, top {MAX_WORK_PER_TICK} this tick):\n"
-        f"{rewrite_list}\n\n"
-        f"MODEL ROUTING:\n"
-        f"- Use MiniMax M2.7 for writing + image generation. The MiniMax skill pack is\n"
-        f"  installed at ~/.hermes/skills/minimax-multimodal-toolkit, minimax-docx,\n"
-        f"  minimax-pdf, minimax-xlsx, minimax-music-gen — prefer mmx CLI for media.\n"
-        f"- Use writing-anti-ai skill on every draft before git add.\n\n"
-        f"BILINGUAL PAIR CONVENTION (from existing posts):\n"
-        f"- English post: <slug>/index.mdx\n"
-        f"- Chinese post: <slug>-zh/index.mdx\n"
-        f"- Match structure, frontmatter keys, and asset paths 1:1.\n\n"
-        f"3-SECTION TEMPLATE: PENDING SPEC.\n"
-        f"The user will provide the exact 3-section structure later. Until then:\n"
-        f"- Translate existing EN posts to CN preserving their current sections.\n"
-        f"- For rewrites, do NOT force a 3-section mould — keep the post's natural\n"
-        f"  sectioning but improve clarity, remove AI-filler, and verify code examples.\n"
-        f"- When the spec arrives, this block will be replaced with the exact sections.\n\n"
-        f"HARD CONSTRAINTS:\n"
-        f"- Never `git push` from this cron. Commit only.\n"
-        f"- Max {MAX_WORK_PER_TICK} posts processed per tick.\n"
-        f"- Run `pnpm build` after edits; abort commit on build failure.\n"
-        f"- No AI-revealing phrasing (as an AI, I will now, etc.).\n"
-    )
-
-    result = subprocess.run(
-        ["claude", "-p", "--model", "sonnet",
-         "--dangerously-skip-permissions",
-         prompt],
-        capture_output=True, text=True,
-        timeout=7200,
-        cwd=str(BLOG_DIR),
-    )
-
-    if result.returncode == 0:
-        open(MARKER, "w").close()
-
-    output = (result.stdout or "").strip()
-    if output:
-        print(output[-4000:] if len(output) > 4000 else output)
-    else:
-        print(f"ClaudeCode exited {result.returncode}: {(result.stderr or '')[:500]}")
+        "note": "no posts written — writing deferred to /blog-curate",
+    }
+    STATUS_JSON.write_text(json.dumps(status, indent=2))
+    # Return wakeAgent: false — Hermes runs its own lightweight summary
+    # instead of a full claude -p execution.
+    print(json.dumps({"wakeAgent": False}))
+    print(f"audit-md: {AUDIT_MD}  missing-zh: {len(missing_zh)}  stale: {len(stale)}")
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

@@ -105,12 +105,26 @@ Reject if:
 
 On fail: `PIPELINE_RESULT: duplicate | <url-of-existing-pr-or-claim>`.
 
-### 2d. Contribution Direction Sanity
+### 2d. Contribution Direction Sanity (JUDGMENT via skill)
 
-Skim the issue thread. Reject if:
-- A maintainer previously declined similar proposals.
-- The issue asks for a design discussion, not a patch (drop-in fixes disallowed).
-- The issue is labelled `wontfix` / `invalid` / `needs-design`.
+**Do NOT try to decide this with grep.** Invoke:
+
+```
+Skill("pr-direction-check")
+```
+
+Pass the pre-fetched JSON blob (issue body, labels, last 20 comments with
+`author_association`, CONTRIBUTING.md excerpt, related open PRs). The skill
+returns a single `DIRECTION_VERDICT:` line with one of:
+
+- `proceed` — safe to continue
+- `block:ai-forbidden` / `block:maintainer-disputed` / `block:rejected-label` / `block:duplicate-pr` / `block:discussion-not-patch`
+- `yield:claimed` / `yield:stale-claim`
+- `ambiguous:<reason>` — surface to human, do not proceed autonomously
+
+On any `block:*` verdict, emit matching `PIPELINE_RESULT:` and move to next candidate. On `ambiguous:*`, halt this candidate and log the evidence.
+
+**Why a skill and not Python regex**: dispute detection, AI-policy interpretation, and claim-recency reading all require reading tone + context. Regex gets both false positives ("I don't see any reason to object" flagged as dispute) and false negatives (genuine skepticism phrased unusually). The judgment lives in the skill; Python only supplies the fetched data.
 
 ---
 
@@ -365,10 +379,13 @@ Write `~/workspace/pr-stage/<repo-name>/pr-report.md`:
 - Status: [submitted / needs-work / blocked]
 ```
 
-End with a single-line status summary so the wake-gate can parse it:
+End with a two-line status summary so the wake-gate can parse it:
 
 ```
 PIPELINE_RESULT: <status> | <pr_url_or_reason>
+PIPELINE_QUALITY_SCORE: <float 0-10>
 ```
 
-Where `<status>` is one of: `pr-created`, `pr-failed`, `issue-skipped`, `repo-forbids-ai`, `cla-blocked`, `duplicate`, `error`.
+**The `PIPELINE_QUALITY_SCORE` line is REQUIRED when status is `pr-created`.** It reports the mean of the triple-review (Phase 9). The wake-gate rewrites your "pr-created" status to `pr-created-unscored` (if the line is missing) or `quality-blocked` (if score < 7.0) before logging — you won't get a green mark for shipping unscored work.
+
+Where `<status>` is one of: `pr-created`, `pr-failed`, `issue-skipped`, `needs-human`, `repo-forbids-ai`, `cla-blocked`, `duplicate`, `maintainer-disputed`, `error`.
