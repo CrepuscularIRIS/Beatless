@@ -422,13 +422,22 @@ def main():
         f"- No internal tooling references (agent names, orchestration, 'my analysis shows').\n"
         f"- Match the project's language. AI disclosure per PullRequest.md §AI Disclosure.\n"
         f"- No status tables, no bolded usernames, no emoji-headed sections.\n\n"
-        f"Use codex:codex-rescue for implementation; gemini:gemini-consult for architecture.\n"
+        f"Use codex:codex-rescue (--model gpt-5.4-mini) for implementation;\n"
+        f"gemini:gemini-consult (--model gemini-3.1-pro-preview) for architecture review.\n"
         f"Pick the most suitable proceed-verdict candidate and execute the full pipeline.\n\n"
+        f"PHASE 9 IS MANDATORY — ALL THREE REVIEW PASSES MUST RUN:\n"
+        f"  Pass 1 (Claude native) — output: PASS_1_CORRECTNESS: <0-10> | notes: <≤200 chars>\n"
+        f"  Pass 2 (Gemini gemini-3.1-pro-preview) — output: PASS_2_ARCHITECTURE: <0-10> | risk: <≤200 chars>\n"
+        f"  Pass 3 (Codex gpt-5.4-mini via /codex:adversarial-review) — output: PASS_3_ADVERSARIAL: <0-10> | challenge: <≤200 chars>\n"
+        f"  Then: REVIEW_AGGREGATE: pass1=<X> pass2=<Y> pass3=<Z> | mean=<M>\n"
+        f"If any subagent call fails: emit PIPELINE_RESULT: review-unavailable | <which> and STOP.\n"
+        f"Do NOT fall back to Claude self-scoring for Pass 2 or Pass 3 — that is how silent quality collapse happens.\n\n"
         f"IMPORTANT: At the end, print in this exact format:\n"
         f"PIPELINE_RESULT: <status> | <pr_url_or_reason>\n"
         f"PIPELINE_QUALITY_SCORE: <float 0-10>   # mean of triple-review; required when status=pr-created\n\n"
         f"Status values: pr-created, pr-failed, issue-skipped, needs-human,\n"
-        f"repo-forbids-ai, cla-blocked, duplicate, maintainer-disputed, error"
+        f"repo-forbids-ai, cla-blocked, duplicate, maintainer-disputed,\n"
+        f"review-unavailable, error"
     )
 
     result = subprocess.run(
@@ -463,27 +472,52 @@ def main():
     score_match = re.search(r'PIPELINE_QUALITY_SCORE:\s*([0-9]+(?:\.[0-9]+)?)', stdout)
     score = float(score_match.group(1)) if score_match else None
 
+    # Triple-review per-pass detection (spec Phase 9 v2 — each pass mandatory).
+    pass1_match = re.search(r'PASS_1_CORRECTNESS:\s*([0-9]+(?:\.[0-9]+)?)', stdout)
+    pass2_match = re.search(r'PASS_2_ARCHITECTURE:\s*([0-9]+(?:\.[0-9]+)?)', stdout)
+    pass3_match = re.search(r'PASS_3_ADVERSARIAL:\s*([0-9]+(?:\.[0-9]+)?)', stdout)
+    passes_present = [bool(pass1_match), bool(pass2_match), bool(pass3_match)]
+
     QUALITY_THRESHOLD = 7.0
+
+    def _review_deficit():
+        """Return reason string if triple-review evidence is missing, else None."""
+        missing = [f"pass{i+1}" for i, ok in enumerate(passes_present) if not ok]
+        return ",".join(missing) if missing else None
 
     if pipeline_match:
         status = pipeline_match.group(1).strip()
         detail = pipeline_match.group(2).strip()
 
-        # Quality-score enforcement: if status claims pr-created, require a
-        # score ≥ threshold. Block the "success" classification otherwise.
+        # Quality-score + triple-review enforcement on pr-created claims.
         if status == "pr-created":
-            if score is None:
+            deficit = _review_deficit()
+            if deficit:
+                status = "pr-created-unreviewed"
+                detail = f"MISSING_PASSES={deficit} — original: {detail}"
+            elif score is None:
                 status = "pr-created-unscored"
                 detail = f"SCORE MISSING — original detail: {detail}"
             elif score < QUALITY_THRESHOLD:
                 status = "quality-blocked"
                 detail = f"score={score} < {QUALITY_THRESHOLD} — original: {detail}"
             else:
-                detail = f"{detail}  [quality={score}]"
+                detail = f"{detail}  [quality={score} passes={','.join(m.group(1) for m in (pass1_match, pass2_match, pass3_match))}]"
         extra = {"quality_score": score} if score is not None else {}
+        if any(passes_present):
+            extra["pass_scores"] = {
+                "correctness": float(pass1_match.group(1)) if pass1_match else None,
+                "architecture": float(pass2_match.group(1)) if pass2_match else None,
+                "adversarial": float(pass3_match.group(1)) if pass3_match else None,
+            }
         write_status(status, detail, extra=extra)
     elif pr_url:
-        if score is None or score < QUALITY_THRESHOLD:
+        deficit = _review_deficit()
+        if deficit:
+            write_status("pr-created-unreviewed", pr_url,
+                         extra={"missing_passes": deficit,
+                                "quality_score": score} if score is not None else {"missing_passes": deficit})
+        elif score is None or score < QUALITY_THRESHOLD:
             write_status("pr-created-unscored" if score is None else "quality-blocked",
                          pr_url, extra={"quality_score": score} if score is not None else {})
         else:
