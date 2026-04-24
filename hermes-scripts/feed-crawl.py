@@ -42,15 +42,23 @@ FEEDS = [
     {"lab": "microsoft-research",   "tier": "tier3", "url": "https://www.microsoft.com/en-us/research/feed/"},
 ]
 
-# DISABLED (no public RSS as of 2026-04 — require HTML scraping, deferred):
-#   Anthropic (anthropic.com/news)
-#   Anthropic Alignment Science (alignment.anthropic.com)
-#   DeepSeek (api-docs.deepseek.com/news)
-#   ByteDance Seed (team.doubao.com)
-#   Moonshot (moonshot.cn/blog)
-#   Meta AI (ai.meta.com/blog)
-#
-# TODO Phase 1.3b: add HTML scrapers for these, gated behind per-lab parsers.
+# HTML scrapers for RSS-less labs. Each entry: (lab, tier, index_url, article_url_pattern).
+# Static HTML only — sites requiring JS rendering (Meta AI blog, DeepSeek) are
+# deferred until we decide whether to ship Playwright (~400 MB chromium cost).
+HTML_SCRAPERS = [
+    {"lab": "anthropic", "tier": "tier1",
+     "index_url": "https://www.anthropic.com/news",
+     "slug_pattern": r'href="(/news/[^"]+)"',
+     "url_prefix": "https://www.anthropic.com"},
+]
+
+# DEFERRED (heavy JS rendering or no public blog as of 2026-04):
+#   Meta AI (ai.meta.com/blog) — heavy SPA, needs Playwright
+#   DeepSeek (deepseek.com/news) — returns 404
+#   ByteDance Seed (team.doubao.com) — SPA, needs Playwright
+#   Moonshot (moonshot.cn) — needs Playwright
+#   Anthropic Alignment (alignment.anthropic.com) — HTML but no article markup
+# TODO: ship Playwright variant only if these sources prove high-value.
 
 UA = "hermes-feed-crawl/0.1 (+research)"
 
@@ -123,6 +131,140 @@ def fetch_feed(url):
     return feedparser.parse(url, request_headers={"User-Agent": UA})
 
 
+def http_get(url, timeout=20):
+    import urllib.request
+    req = urllib.request.Request(url, headers={"User-Agent": UA})
+    with urllib.request.urlopen(req, timeout=timeout) as r:
+        return r.read().decode("utf-8", errors="ignore")
+
+
+META_TAG_PATS = {
+    "og:title": re.compile(r'<meta[^>]+property="og:title"[^>]+content="([^"]+)"'),
+    "og:description": re.compile(r'<meta[^>]+property="og:description"[^>]+content="([^"]+)"'),
+    "article:published_time": re.compile(r'<meta[^>]+property="article:published_time"[^>]+content="([^"]+)"'),
+}
+
+
+def scrape_article(url):
+    """Fetch one article URL, extract title + description + date from meta tags.
+
+    Returns dict or None on failure. Date falls back to crawl time if not
+    present in meta (Anthropic doesn't publish article:published_time).
+    """
+    try:
+        html = http_get(url)
+    except Exception:
+        return None
+    out = {"url": url}
+    for key, pat in META_TAG_PATS.items():
+        m = pat.search(html)
+        if m:
+            out[key] = m.group(1)
+    return out
+
+
+def scrape_html_source(scraper_cfg, days, feeds_dir, summary_ref, dry_run):
+    """Generic static-HTML scraper. Fetch index, extract article slugs, fetch
+    each article for title/description/date, emit notes same as RSS path.
+    """
+    lab, tier = scraper_cfg["lab"], scraper_cfg["tier"]
+    try:
+        index_html = http_get(scraper_cfg["index_url"])
+    except Exception as e:
+        summary_ref["errors"].append(f"{lab}: index-fetch-failed {e}")
+        summary_ref["per_feed"][lab] = {"error": f"index: {e}"[:120]}
+        print(f"  {lab} (html): INDEX FAILED — {e}")
+        return
+
+    slug_pat = re.compile(scraper_cfg["slug_pattern"])
+    slugs = list(dict.fromkeys(slug_pat.findall(index_html)))  # preserve order, dedup
+    print(f"  {lab} (html): {len(slugs)} article slugs found")
+    prefix = scraper_cfg.get("url_prefix", "")
+
+    fetched, written, skipped, too_old = 0, 0, 0, 0
+    for slug in slugs[:25]:  # cap index-page crawl to avoid flood
+        article_url = prefix + slug if slug.startswith("/") else slug
+        art = scrape_article(article_url)
+        if not art or not art.get("og:title"):
+            continue
+        fetched += 1
+
+        # Date: use article:published_time if present, else today's date.
+        if art.get("article:published_time"):
+            date_str = art["article:published_time"][:10]
+            try:
+                pub_dt = datetime.fromisoformat(date_str)
+                year, month, day = pub_dt.year, pub_dt.month, pub_dt.day
+            except ValueError:
+                year = month = day = None
+        else:
+            # No date metadata — treat as today (captured via index order,
+            # so older articles fall off the index and won't re-appear).
+            now = datetime.now(timezone.utc)
+            year, month, day = now.year, now.month, now.day
+
+        if year and month and day:
+            if not is_recent_enough_ymd(year, month, day, days):
+                too_old += 1
+                continue
+            date = f"{year:04d}-{month:02d}-{day:02d}"
+        else:
+            date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+
+        if dry_run:
+            written += 1
+            time.sleep(1)
+            continue
+
+        slug_part = slugify(art["og:title"]) or slug.rsplit("/", 1)[-1].strip("/")
+        date_dir = feeds_dir / date
+        date_dir.mkdir(parents=True, exist_ok=True)
+        path = date_dir / f"{lab}-{slug_part}.md"
+        if path.exists():
+            skipped += 1
+            continue
+        safe_title = art["og:title"].replace('"', "'")[:200]
+        desc = art.get("og:description", "")[:800].replace("\n", " ")
+        content = f"""---
+title: "{safe_title}"
+source: feed
+url: {article_url}
+date: {date}
+lab: {lab}
+tier: {tier}
+status: unread
+tags: [feed, {lab}, {tier}]
+---
+
+**Source:** [{article_url}]({article_url})
+
+## Summary
+
+{desc}
+"""
+        path.write_text(content)
+        written += 1
+        time.sleep(1)  # polite rate-limit between article fetches
+
+    summary_ref["per_feed"][lab] = {
+        "tier": tier, "source": "html", "fetched": fetched, "eligible": written + skipped,
+        "too_old": too_old, "written": written, "skipped_existing": skipped,
+    }
+    summary_ref["new_notes"] += written
+    summary_ref["skipped_existing"] += skipped
+    summary_ref["per_tier"][tier] = summary_ref["per_tier"].get(tier, 0) + written
+    print(f"  {lab} (html, {tier}): articles={fetched} written={written} skipped={skipped} too_old={too_old}")
+
+
+def is_recent_enough_ymd(year, month, day, days):
+    try:
+        dt = datetime(year, month, day, tzinfo=timezone.utc)
+    except ValueError:
+        return False
+    age = datetime.now(timezone.utc) - dt
+    return 0 <= age.days <= days
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser()
     parser.add_argument("--dry-run", action="store_true",
@@ -191,6 +333,11 @@ def main(argv=None):
         summary["skipped_existing"] += skipped
         summary["per_tier"][tier] = summary["per_tier"].get(tier, 0) + written
         print(f"  {lab} ({tier}): fetched={fetched} recent={written + skipped} written={written} skipped={skipped}")
+        time.sleep(2)
+
+    # HTML scrapers (non-RSS labs)
+    for scraper_cfg in HTML_SCRAPERS:
+        scrape_html_source(scraper_cfg, args.days, VAULT_FEEDS, summary, args.dry_run)
         time.sleep(2)
 
     summary["finished_at"] = datetime.now(timezone.utc).isoformat()

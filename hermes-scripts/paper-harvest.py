@@ -583,8 +583,14 @@ def cvf_to_zotero_item(p, venue_tag, venue_label):
 # HuggingFace Papers (new in v2)
 # =================================================================
 
-def fetch_huggingface_papers(limit=30):
-    """Hit HF daily-papers API. Returns normalized dicts."""
+def fetch_huggingface_papers(limit=100):
+    """Hit HF daily-papers API. Returns normalized dicts.
+
+    API caps at limit=100 (HTTP 400 for 101+, verified 2026-04-24). Caller
+    may pass higher values but the server will reject them — we clamp here
+    as a safety net.
+    """
+    limit = min(limit, 100)
     url = f"https://huggingface.co/api/daily_papers?limit={limit}"
     extra = {"Authorization": f"Bearer {HF_TOKEN}"} if HF_TOKEN else None
     try:
@@ -771,8 +777,8 @@ def main(argv=None):
                         help="ACL Anthology papers per event (default 12).")
     parser.add_argument("--per-cat", type=int, default=25,
                         help="arXiv results per category (default 25).")
-    parser.add_argument("--hf-limit", type=int, default=30,
-                        help="HuggingFace daily-papers count (default 30).")
+    parser.add_argument("--hf-limit", type=int, default=100,
+                        help="HuggingFace daily-papers count (default 100, API cap observed 2026-04-24).")
     args = parser.parse_args(argv)
 
     if not ZOT_KEY or not ZOT_USER:
