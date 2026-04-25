@@ -359,3 +359,39 @@ Order matters. Manual-guided first, automation later.
 Roadmap above is Phase 1–5 of the near-term Research OS. User flagged that they are working on the **next-stage architecture** beyond this — likely the shape of the full Autonomous Research OS once the KB + blog + exp + daily-reflect loops are all green.
 
 Placeholder: this section will be filled when the user shares the next-stage design. For now, every decision in Phase 1–5 should be reversible and composable so the next stage can graft on without forcing a rewrite.
+
+---
+
+## 10. Status update — 2026-04-25
+
+Two days into this roadmap. What actually shipped vs. what §2 inventory still claims:
+
+### Now done (was ❌ in §2 inventory)
+
+- **Zotero → Obsidian sync** — `~/.hermes/scripts/zotero-to-obsidian.py` is live, manual run only (not yet a cron job per §1.1's `every 180m` plan). 24 papers synced into `~/obsidian-vault/papers/literature/@*.md` from the A-Tier Zotero collection.
+- **Multi-source paper harvester** — `~/.hermes/scripts/paper-harvest.py` + `paper-backfill.py` exist and run.
+- **Blog/report feed crawler** — `~/.hermes/scripts/feed-crawl.py` is producing daily snapshots; 43 days in `~/obsidian-vault/feeds/`.
+
+### Newly built 2026-04-25 (NOT in §2)
+
+- **Blog translation pipeline (T1)** — `~/.hermes/scripts/blog-translate.py` + Hermes cron job `Blog Translate` (every 10m). Produced 7 bilingual drafts in `~/obsidian-vault/blog-drafts/` during this session. Uses MiniMax M2.7 directly (no Claude in writing path) per user directive.
+- **Blog drafting pipeline (T2)** — `~/.hermes/scripts/blog-draft.py` + Hermes cron job `Blog Draft` (every 30m). Reads Zotero notes, generates bilingual Paper Spotlight per the 2026-04-25 `AI 博客写作模板指南.md` template. Same Hermes-only writing path.
+- **3-section template arrived** — `/home/lingxufeng/claw/plan/AI博客写作模板指南.md` (the spec §6.1 was blocking on). Three templates: Signal Post / Paper Spotlight / Milestone Post. Five style commandments. 12 banned phrases. Quality checklist.
+
+### Still missing (§2 inventory)
+
+- **Paper-note generation loop** (Phase 2) — currently the Zotero notes are basic frontmatter + abstract; no per-paper "what / why-surprising / how-useful-to-me" curation step.
+- **`/exp-discover` wired to KB** (Phase 3) — `/exp-*` commands moved to `deprecated/` during the 2026-04-24 paradigm pivot to the new `/research-*` family.
+- **Daily evolution loop** (Phase 4) — not built.
+- **Multi-direction progress dashboard** (Phase 5) — not built.
+
+### Architecture re-confirmed (was confused 2026-04-25)
+
+- **`github-pr.py` and `github-response.py` shelling out to `claude -p` is BY DESIGN** per §2 of `2026-04-23-personal-research-automation-system.md`: "Hermes cron wake-gates call `claude -p --model sonnet` with a specific `/command`."
+- **Blog scripts using MMX directly is a content-vs-code SPECIAL CASE** — content (translation, drafting) wants Hermes-routed models; code (PR review, refactor) wants Claude. Both run through Hermes cron — Hermes owns the schedule, the script picks the right writer per task type.
+
+### Diff between 2026-04-24 paradigm pivot and this roadmap
+
+The 2026-04-24 pivot to `Research Constitution + Automated Research Ecology` (see `~/claw/Beatless/plan/2026-04-24-research-constitution-paradigm-phase-1.md`) supersedes Phase 3's `/exp-*` design with the new `/research-*` family. The KB foundation (Phase 1) and blog curation (Phase 2) of THIS roadmap are still load-bearing.
+
+Phase 4 (Daily Evolution Loop with Opus 4.7) and Phase 5 (Dashboard) are unchanged by the pivot.
