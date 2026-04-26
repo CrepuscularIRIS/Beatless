@@ -10,9 +10,9 @@ Tracks open work after the 2026-04-25 hIE taxonomy patch (blog-draft + blog-tran
 
 ## ✅ Done 2026-04-25
 
-- [x] 5-hIE asset library bootstrapped at `~/blog/src/assets/hIE/` (15 images, 14 MB)
+- [x] 5-hIE asset library bootstrapped at `~/claw/blog/src/assets/hIE/` (15 images, 14 MB)
 - [x] Canonical taxonomy doc at `~/claw/plan/blog-taxonomy-hIE.md`
-- [x] Asset README at `~/blog/src/assets/hIE/README.md`
+- [x] Asset README at `~/claw/blog/src/assets/hIE/README.md`
 - [x] `blog-draft.py` Stage 2 prompt emits `hIE` field
 - [x] `blog-draft.py` Stage 3 prompt embeds `hIE` + `hero_image` in frontmatter
 - [x] `blog-draft.py` Python `pick_hero_image()` (deterministic, no LLM tokens)
@@ -25,9 +25,9 @@ Tracks open work after the 2026-04-25 hIE taxonomy patch (blog-draft + blog-tran
 
 ### TODO-1: Crop Saturnus from group shot
 
-`~/blog/src/assets/hIE/saturnus/` is empty because Saturnus has no public single-character imagery. The 5-hIE same-frame group shot at `~/blog/src/assets/hIE/_shared/group-5hIE-arato-alphacoders-896444.jpg` (1920×1080) contains all 5 hIEs including Saturnus.
+`~/claw/blog/src/assets/hIE/saturnus/` is empty because Saturnus has no public single-character imagery. The 5-hIE same-frame group shot at `~/claw/blog/src/assets/hIE/_shared/group-5hIE-arato-alphacoders-896444.jpg` (1920×1080) contains all 5 hIEs including Saturnus.
 
-**Action**: Crop Saturnus's region from the group shot, save as `~/blog/src/assets/hIE/saturnus/saturnus-cropped-from-group-896444.jpg`.
+**Action**: Crop Saturnus's region from the group shot, save as `~/claw/blog/src/assets/hIE/saturnus/saturnus-cropped-from-group-896444.jpg`.
 
 **Tools**:
 - Manual: any image editor (GIMP, Photoshop, Krita, even Preview crop on macOS)
@@ -85,7 +85,7 @@ https://w.wallhaven.cc/full/kw/wallhaven-kw3xk6.jpg
 
 **Action**: from a machine with Wallhaven access, run:
 ```bash
-ASSETS=~/blog/src/assets/hIE
+ASSETS=~/claw/blog/src/assets/hIE
 curl -sSL -A 'Mozilla/5.0' -o "$ASSETS/lacia/wallhaven-p8kwjj-lacia-4k-minimalism.jpg"  https://w.wallhaven.cc/full/p8/wallhaven-p8kwjj.jpg
 curl -sSL -A 'Mozilla/5.0' -o "$ASSETS/methode/wallhaven-kw3xk6-methode-lacia.jpg"  https://w.wallhaven.cc/full/kw/wallhaven-kw3xk6.jpg
 ```
@@ -94,7 +94,7 @@ curl -sSL -A 'Mozilla/5.0' -o "$ASSETS/methode/wallhaven-kw3xk6-methode-lacia.jp
 
 ### TODO-5: Source attribution table per file
 
-`~/blog/src/assets/hIE/README.md` summarizes attribution at the directory level. For long-term traceability, consider a per-file attribution sidecar:
+`~/claw/blog/src/assets/hIE/README.md` summarizes attribution at the directory level. For long-term traceability, consider a per-file attribution sidecar:
 
 ```
 src/assets/hIE/snowdrop/
@@ -156,7 +156,7 @@ Each index page uses the hIE's hero from `_shared/` group shot or a representati
 ## 📋 Status snapshot (auto-updateable)
 
 ```
-Asset library:    ~/blog/src/assets/hIE/   (15 files, 14 MB)
+Asset library:    ~/claw/blog/src/assets/hIE/   (15 files, 14 MB)
   _shared/  4 files     ✓
   snowdrop/ 3 files     ✓
   kouka/    3 files     ✓

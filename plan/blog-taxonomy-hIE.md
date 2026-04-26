@@ -3,7 +3,7 @@
 **Created**: 2026-04-25
 **Owner**: CrepuscularIRIS
 **Source archive**: `/home/lingxufeng/claw/Beatless/archive/v2-deprecated/agents/{kouka,snowdrop,saturnus,methode,lacia}/IDENTITY.md`
-**Asset library**: `/home/lingxufeng/blog/src/assets/hIE/`
+**Asset library**: `/home/lingxufeng/claw/blog/src/assets/hIE/`
 
 ---
 
@@ -62,7 +62,7 @@ confidence: high | medium | low
 ## 4. Asset path convention
 
 ```
-~/blog/src/assets/hIE/
+~/claw/blog/src/assets/hIE/
 ├── _shared/        # 5-hIE same-frame, multi-character, generic Beatless
 ├── snowdrop/       # paper-spotlight imagery
 ├── kouka/          # signal/news imagery
@@ -119,7 +119,7 @@ Until saturnus/ is filled with proper imagery, do NOT auto-generate fake Beatles
 
 All images currently in the library are derived from public anime image boards (yande.re, AlphaCoders) where original artists are tagged in the URL/metadata. Most prominent original artist: **redjuice / Kuwashima Rei** (Beatless original character designer).
 
-**Per-post obligation**: every post embedding one of these images MUST cite the original source URL in the `sources:` frontmatter list. The `~/blog/src/assets/hIE/README.md` keeps the canonical artist-attribution table for cross-referencing.
+**Per-post obligation**: every post embedding one of these images MUST cite the original source URL in the `sources:` frontmatter list. The `~/claw/blog/src/assets/hIE/README.md` keeps the canonical artist-attribution table for cross-referencing.
 
 **Use stance**: personal blog, non-commercial, transformative curation (using as taxonomy markers, not standalone reproduction). When in doubt, use `_shared/` group shots rather than single-character keyvis.
 

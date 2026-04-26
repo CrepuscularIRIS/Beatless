@@ -341,7 +341,7 @@ _End of state snapshot. Next time you ask "what's the state?", read this first �
 - [ ] **Wait for Google P0 download** to finish (still grinding via highspeed WLAN)
 - [ ] **Day 1 RefChartQA inspection** — fill `bbox_coord_system` and `image_resize_rule` in `experiment_manifest.yaml`
 - [ ] **First MinLoop run** — Qwen2.5-VL-3B on RefChartQA after Day-1 inspection
-- [ ] **Review the 67 blog drafts** — pick keepers, commit Chinese pairs to `~/blog/`, discard duds
+- [ ] **Review the 67 blog drafts** — pick keepers, commit Chinese pairs to `~/claw/blog/`, discard duds
 - [ ] **P1 downloads** — kick off `python3 download_all.py P1` once P0 finishes (InfoChartQA, ChartAlignBench, TinyChart, ChartGemma)
 
 #### Belief project (parallel track, NOT YET STARTED)
