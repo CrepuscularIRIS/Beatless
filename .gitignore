@@ -13,3 +13,6 @@ runtime/nlm/*
 runtime/soak/*
 !runtime/soak/.gitkeep
 .gemini-tasks/
+
+# Local archives — kept on disk but not committed (size + irrelevance to repo history)
+archive/orphan-*.tar.gz
