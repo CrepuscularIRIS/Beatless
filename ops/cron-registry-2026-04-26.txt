@@ -1,0 +1,103 @@
+
+┌─────────────────────────────────────────────────────────────────────────┐
+│                         Scheduled Jobs                                  │
+└─────────────────────────────────────────────────────────────────────────┘
+
+  c441224738df [active]
+    Name:      GitHub Response
+    Schedule:  every 60m
+    Repeat:    ∞
+    Next run:  2026-04-26T09:15:50.384954-04:00
+    Deliver:   local
+    Script:    github-response.py
+    Last run:  2026-04-26T08:15:50.384954-04:00  ok
+
+  35bf34b5ce93 [active]
+    Name:      GitHub PR Pipeline
+    Schedule:  every 150m
+    Repeat:    ∞
+    Next run:  2026-04-26T09:19:21.614797-04:00
+    Deliver:   local
+    Script:    github-pr.py
+    Last run:  2026-04-26T06:49:21.614797-04:00  ok
+
+  f3fe3e77807f [active]
+    Name:      Auto Research
+    Schedule:  every 240m
+    Repeat:    ∞
+    Next run:  2026-04-26T12:28:46.432500-04:00
+    Deliver:   local
+    Script:    auto-research.py
+    Last run:  2026-04-26T08:28:46.432500-04:00  ok
+
+  1bd2e326faff [active]
+    Name:      Blog Maintenance
+    Schedule:  every 720m
+    Repeat:    ∞
+    Next run:  2026-04-26T12:25:55.277778-04:00
+    Deliver:   local
+    Script:    blog-maintenance.py
+    Last run:  2026-04-26T00:25:55.277778-04:00  ok
+
+  0bef9fb8e1e5 [active]
+    Name:      Paper Harvest
+    Schedule:  every 360m
+    Repeat:    ∞
+    Next run:  2026-04-26T12:14:17.686425-04:00
+    Deliver:   local
+    Script:    paper-harvest.py
+    Last run:  2026-04-26T06:14:17.686425-04:00  ok
+
+  3122f8512b60 [active]
+    Name:      Zotero Sync
+    Schedule:  every 360m
+    Repeat:    ∞
+    Next run:  2026-04-26T12:11:05.863238-04:00
+    Deliver:   local
+    Script:    zotero-to-obsidian.py
+    Last run:  2026-04-26T06:11:05.863238-04:00  ok
+
+  bf68952eb6bc [active]
+    Name:      Feed Crawl
+    Schedule:  every 720m
+    Repeat:    ∞
+    Next run:  2026-04-26T15:24:56.382331-04:00
+    Deliver:   local
+    Script:    feed-crawl.py
+    Last run:  2026-04-26T03:24:56.382331-04:00  ok
+
+  146f3b29a645 [active]
+    Name:      Blog Translate
+    Schedule:  every 10m
+    Repeat:    ∞
+    Next run:  2026-04-26T09:19:11.793762-04:00
+    Deliver:   local
+    Script:    blog-translate.py
+    Last run:  2026-04-26T08:59:11.750878-04:00  ok
+
+  2ed9a07d71ff [active]
+    Name:      Blog Draft
+    Schedule:  every 30m
+    Repeat:    ∞
+    Next run:  2026-04-26T09:18:20.542359-04:00
+    Deliver:   local
+    Script:    blog-draft.py
+    Last run:  2026-04-26T08:48:20.542359-04:00  ok
+
+  de4594338660 [active]
+    Name:      Daily Evolution
+    Schedule:  every 1440m
+    Repeat:    ∞
+    Next run:  2026-04-27T08:27:46.347023-04:00
+    Deliver:   local
+    Script:    daily-evolution.py
+    Last run:  2026-04-26T08:27:46.347023-04:00  ok
+
+  fe550514fa1e [active]
+    Name:      Research Host
+    Schedule:  every 360m
+    Repeat:    ∞
+    Next run:  2026-04-26T15:09:01.729729-04:00
+    Deliver:   local
+    Script:    research-host-cron.py
+
