@@ -23,6 +23,32 @@ POLICY_CACHE = os.path.expanduser("~/.hermes/shared/policy-cache.json")
 LANGUAGES = ["python", "rust", "go", "javascript", "typescript"]
 AUTHOR = "CrepuscularIRIS"
 
+# 2026-04-26 lessons learned (StatPan/lawpy PR #5 retrospective):
+#   1. We opened a PR on a 0-star personal repo that's unlikely to ever merge.
+#   2. We linked "Closes #2" where issue #2 was a bot-generated API-drift alert,
+#      not a feature request. Misleading framing for the maintainer.
+#   3. The PR was created with status `pr-created-unreviewed` (MISSING_PASSES
+#      = pass1,pass2,pass3) — our triple-review chain didn't run yet the PR
+#      went live. Constitutional violation per Regulations.md P2.
+#
+# Fixes baked into this version (all preflight, before claude -p ever fires):
+#   - MIN_REPO_STARS gate: skip issues on tiny repos unless explicit override
+#   - bot-author filter: refuse to "Closes #N" on issues opened by bots
+#   - bot-noise label filter: skip api-drift / ci-failure auto-issues
+#   - post-fact remediation: when status=pr-created-unreviewed, auto-close
+#     the unreviewed PR with apology + restart sprint (next tick)
+MIN_REPO_STARS = int(os.environ.get("GITHUB_PR_MIN_STARS", "20"))
+BOT_LOGIN_SUFFIXES = ("[bot]",)
+BOT_LOGIN_NAMES = {
+    "github-actions", "app/github-actions", "dependabot", "renovate",
+    "codecov", "cla-assistant", "mergify", "snyk-bot", "imgbot",
+    "allcontributors", "stale", "circleci", "netlify",
+}
+BOT_NOISE_LABELS = {
+    "api-drift", "ci-failure", "ci-failed", "ci/cd",
+    "auto-generated", "automated", "stale-bot",
+}
+
 # Phrases that indicate a repo REJECTS AI-generated contributions.
 # Must co-occur with a prohibition verb in the same sentence.
 AI_MARKERS = [
@@ -58,7 +84,8 @@ def get_claimable_issues():
                  f"--label={label}",
                  "--state=open", "--sort=updated",
                  f"--language={lang}", "--limit=2",
-                 "--json=number,title,repository,labels"],
+                 # +author so we can filter out bot-issued items pre-flight
+                 "--json=number,title,repository,labels,author"],
                 capture_output=True, text=True, timeout=30
             )
             if result.returncode != 0:
@@ -77,6 +104,55 @@ def get_claimable_issues():
             seen.add(key)
             deduped.append(issue)
     return deduped
+
+
+def _is_bot_login(login: str) -> bool:
+    if not login:
+        return False
+    low = login.lower()
+    if any(low.endswith(s) for s in BOT_LOGIN_SUFFIXES):
+        return True
+    if low in BOT_LOGIN_NAMES:
+        return True
+    return False
+
+
+def _has_bot_noise_label(issue) -> str | None:
+    for lbl in (issue.get("labels") or []):
+        name = (lbl.get("name") or "").lower()
+        if name in BOT_NOISE_LABELS:
+            return name
+    return None
+
+
+def _repo_stars(repo: str) -> int:
+    """Fetch repo stargazers count. -1 on error so we DON'T accidentally pass
+    a star gate when the API call fails."""
+    try:
+        r = subprocess.run(
+            ["gh", "api", f"repos/{repo}", "--jq", ".stargazers_count"],
+            capture_output=True, text=True, timeout=15,
+        )
+        if r.returncode != 0 or not r.stdout.strip():
+            return -1
+        return int(r.stdout.strip())
+    except Exception:
+        return -1
+
+
+def _issue_scope_keywords(title: str, body: str) -> set[str]:
+    """Cheap noun extraction for issue/scope match heuristic. Lowercase tokens
+    of length ≥ 4 from title + first 400 chars of body, minus stopwords."""
+    stopwords = {
+        "the","this","that","with","from","into","over","about","when","what",
+        "have","been","will","cannot","shall","should","would","could","might",
+        "issue","problem","bug","help","wanted","please","could","cant","does",
+        "live","drift","detected","action","required","run","fix","update",
+        "implement","feature","support","add","create","make",
+    }
+    src = (title or "") + " " + (body or "")[:400]
+    tokens = re.findall(r"[A-Za-z]{4,}", src.lower())
+    return {t for t in tokens if t not in stopwords}
 
 
 def load_policy_cache():
@@ -274,8 +350,11 @@ def preflight_filter(issues):
 
     Deterministic gates, in order:
       1. Issue has block-label (wontfix / invalid / needs-design / etc.)
-      2. Duplicate open PR already references this issue (Fixes/Closes/Resolves #N)
-      3. Contributing.md exists check (info only — the skill will READ it)
+      2. Issue is bot-authored (api-drift alert, dependabot, etc.)
+      3. Issue carries bot-noise label (api-drift / ci-failure / automated)
+      4. Repo has < MIN_REPO_STARS stars (avoid 0-star personal projects)
+      5. Duplicate open PR already references this issue (Fixes/Closes/Resolves #N)
+      6. Contributing.md exists check (info only — the skill will READ it)
 
     Passing preflight means the issue is worth spending the claude -p session
     on; the session itself runs pr-direction-check for the nuanced verdict.
@@ -294,7 +373,27 @@ def preflight_filter(issues):
             rejected.append((issue, f"Issue has block-label '{lbl}'"))
             continue
 
-        # Gate 2: duplicate open PR — deterministic `Fixes #N` grep
+        # Gate 2: bot-authored issue — never legitimate "Closes #N" target
+        author_login = (issue.get("author") or {}).get("login", "")
+        if _is_bot_login(author_login):
+            rejected.append((issue, f"Issue authored by bot '{author_login}' — "
+                                    f"no 'Closes #N' linkage allowed"))
+            continue
+
+        # Gate 3: bot-noise labels — skip api-drift / ci-failure / etc.
+        noise = _has_bot_noise_label(issue)
+        if noise:
+            rejected.append((issue, f"Bot-noise label '{noise}' — skip"))
+            continue
+
+        # Gate 4: repo star floor — avoid 0-star personal projects
+        stars = _repo_stars(repo)
+        if stars < MIN_REPO_STARS:
+            rejected.append((issue, f"Repo {repo} has {stars} stars "
+                                    f"(< {MIN_REPO_STARS} threshold)"))
+            continue
+
+        # Gate 5: duplicate open PR — deterministic `Fixes #N` grep
         if has_duplicate_pr(repo, number):
             rejected.append((issue, f"Open PR already references #{number}"))
             continue
@@ -305,10 +404,43 @@ def preflight_filter(issues):
         comments = _fetch_issue_comments(repo, number)
         issue["_policy"] = policy
         issue["_comments"] = comments[-20:]  # last 20 for the skill
+        issue["_stars"] = stars  # surface to prompt for context
         approved.append(issue)
 
     save_policy_cache(cache)
     return approved, rejected
+
+
+def remediate_unreviewed_pr(pr_url: str, missing_passes: str) -> dict:
+    """Auto-close a PR that was opened without our triple-review (P2 violation).
+
+    Per Regulations.md P2: any PR claiming `keep` requires Codex+Gemini+Sonnet
+    review. If that's missing, the PR was opened in violation of the
+    constitution. We auto-close with an apology comment to maintain trust with
+    maintainers (better to retract than leave an unverified change pending).
+    """
+    out = {"pr_url": pr_url, "missing_passes": missing_passes,
+           "remediation": "skipped"}
+    if not pr_url:
+        return out
+    try:
+        comment_body = (
+            "Closing this PR — our internal review pipeline did not complete "
+            f"before the PR was opened (missing passes: {missing_passes}).\n\n"
+            "Sorry for the noise. We'll re-evaluate the underlying issue and "
+            "open a fresh PR only after the review chain has completed. If the "
+            "code direction was useful, feel free to keep what's here as a "
+            "reference; otherwise this branch can be deleted safely."
+        )
+        # gh pr close accepts --comment
+        r = subprocess.run(
+            ["gh", "pr", "close", pr_url, "--comment", comment_body],
+            capture_output=True, text=True, timeout=30,
+        )
+        out["remediation"] = "closed" if r.returncode == 0 else f"close-failed: {r.stderr[:200]}"
+    except Exception as e:
+        out["remediation"] = f"exception: {str(e)[:200]}"
+    return out
 
 
 def extract_pr_url(text):
@@ -526,6 +658,11 @@ def main():
             if deficit:
                 status = "pr-created-unreviewed"
                 detail = f"MISSING_PASSES={deficit} — original: {detail}"
+                # Auto-remediate per Regulations.md P2 — close the unreviewed PR.
+                pr_url_for_close = extract_pr_url(detail) or extract_pr_url(stdout)
+                if pr_url_for_close:
+                    rem = remediate_unreviewed_pr(pr_url_for_close, deficit)
+                    detail += f"  [auto-remediation: {rem.get('remediation')}]"
             elif score is None:
                 status = "pr-created-unscored"
                 detail = f"SCORE MISSING — original detail: {detail}"
@@ -550,9 +687,13 @@ def main():
     elif pr_url:
         deficit = _review_deficit()
         if deficit:
-            write_status("pr-created-unreviewed", pr_url,
-                         extra={"missing_passes": deficit,
-                                "quality_score": score} if score is not None else {"missing_passes": deficit})
+            # Same auto-remediation path as the pipeline_match branch above.
+            rem = remediate_unreviewed_pr(pr_url, deficit)
+            extra_payload = {"missing_passes": deficit,
+                             "remediation": rem.get("remediation")}
+            if score is not None:
+                extra_payload["quality_score"] = score
+            write_status("pr-created-unreviewed", pr_url, extra=extra_payload)
         elif score is None or score < QUALITY_THRESHOLD:
             write_status("pr-created-unscored" if score is None else "quality-blocked",
                          pr_url, extra={"quality_score": score} if score is not None else {})
