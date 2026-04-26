@@ -102,18 +102,48 @@ def download_pdf(pdf_url: str, dest: Path) -> tuple[bool, str]:
         return False, f"download-error: {str(e)[:120]}"
 
 
-def pdf_to_markdown(pdf_path: Path) -> tuple[str | None, str]:
-    """Extract text and minimally structure it as Markdown.
+def _extract_via_mineru(pdf_path: Path, work_dir: Path) -> tuple[str | None, str]:
+    """v1 backend: invoke `mineru` CLI in pipeline mode → structured Markdown.
 
-    v0: pypdf page-by-page text extraction. Headings + paragraph breaks are
-    inferred from blank-line patterns. v1 will swap to MinerU for better
-    structure preservation.
+    MinerU preserves figures, equations, and tables far better than pypdf —
+    that's the whole point of swapping. We call its CLI rather than its
+    Python API so the install surface stays small (mineru manages its own
+    sub-process workers + model loading).
     """
+    work_dir.mkdir(parents=True, exist_ok=True)
+    try:
+        # `mineru -p <pdf> -o <out_dir> -m auto` produces:
+        #   <out_dir>/<pdf_stem>/auto/<pdf_stem>.md
+        result = subprocess.run(
+            ["mineru", "-p", str(pdf_path), "-o", str(work_dir), "-m", "auto"],
+            capture_output=True, text=True, timeout=300,
+        )
+        if result.returncode != 0:
+            return None, f"mineru-rc={result.returncode}: {result.stderr[-200:]}"
+        # Locate the produced .md
+        stem = pdf_path.stem
+        candidates = list(work_dir.rglob(f"{stem}.md"))
+        if not candidates:
+            return None, f"mineru-no-output: nothing in {work_dir}"
+        body = candidates[0].read_text(encoding="utf-8", errors="ignore")
+        if len(body) > MAX_BODY_CHARS:
+            body = body[:MAX_BODY_CHARS] + f"\n\n<!-- truncated at {MAX_BODY_CHARS} chars -->"
+        return body, f"ok-mineru ({len(body)} chars)"
+    except subprocess.TimeoutExpired:
+        return None, "mineru-timeout"
+    except FileNotFoundError:
+        return None, "mineru-not-installed"
+    except Exception as e:
+        return None, f"mineru-error: {str(e)[:120]}"
+
+
+def _extract_via_pypdf(pdf_path: Path) -> tuple[str | None, str]:
+    """v0 fallback: page-by-page text via pypdf. Loses figures, equations,
+    table structure — but works without any extra deps and is fast."""
     try:
         from pypdf import PdfReader
     except ImportError:
         return None, "pypdf-not-installed"
-
     try:
         reader = PdfReader(str(pdf_path))
         chunks = []
@@ -126,13 +156,30 @@ def pdf_to_markdown(pdf_path: Path) -> tuple[str | None, str]:
             if text:
                 chunks.append(text)
         body = "\n\n".join(chunks)
-        # Normalize: collapse 3+ newlines, strip junky page-number-only lines
         body = re.sub(r"\n{3,}", "\n\n", body)
         if len(body) > MAX_BODY_CHARS:
             body = body[:MAX_BODY_CHARS] + f"\n\n<!-- truncated at {MAX_BODY_CHARS} chars -->"
-        return body, f"ok ({len(reader.pages)} pages, {len(body)} chars)"
+        return body, f"ok-pypdf ({len(reader.pages)} pages, {len(body)} chars)"
     except Exception as e:
-        return None, f"parse-error: {str(e)[:120]}"
+        return None, f"pypdf-error: {str(e)[:120]}"
+
+
+def pdf_to_markdown(pdf_path: Path) -> tuple[str | None, str]:
+    """Extract text + structure as Markdown.
+
+    Tries MinerU (high quality — preserves figures/equations/tables) first,
+    falls back to pypdf (text-only) if MinerU isn't installed or fails.
+    Cron observability: returned status string includes which backend won.
+    """
+    work_dir = pdf_path.parent / ".mineru-work"
+    body, msg = _extract_via_mineru(pdf_path, work_dir)
+    if body:
+        return body, msg
+    # Fall back to pypdf
+    pypdf_body, pypdf_msg = _extract_via_pypdf(pdf_path)
+    if pypdf_body:
+        return pypdf_body, f"{pypdf_msg} [mineru fell back: {msg}]"
+    return None, f"both-failed (mineru: {msg}; pypdf: {pypdf_msg})"
 
 
 def extract_paper_meta(note_path: Path) -> dict | None:
@@ -159,7 +206,8 @@ def extract_paper_meta(note_path: Path) -> dict | None:
     } if fields.get("citekey") else None
 
 
-def write_fulltext_note(meta: dict, body: str, source_kind: str, pdf_url: str) -> Path:
+def write_fulltext_note(meta: dict, body: str, source_kind: str, pdf_url: str,
+                        extractor_tag: str = "pypdf-v0") -> Path:
     """Save the extracted body as ~/obsidian-vault/papers/full-text/<citekey>.md."""
     FULLTEXT_DIR.mkdir(parents=True, exist_ok=True)
     out_path = FULLTEXT_DIR / f"{meta['citekey']}.md"
@@ -172,12 +220,11 @@ def write_fulltext_note(meta: dict, body: str, source_kind: str, pdf_url: str) -
         f"source_kind: {source_kind}\n"
         f"pdf_url: {pdf_url}\n"
         f"extracted: {today}\n"
-        "extractor: pypdf-v0\n"
+        f"extractor: \"{extractor_tag}\"\n"
         f"linked_from: \"[[@{meta['citekey']}]]\"\n"
         "---\n\n"
         f"# {meta['title']}\n\n"
-        f"> Extracted body from {source_kind} PDF. Stub note: [[@{meta['citekey']}]].\n"
-        f"> Extractor: pypdf v0 (will swap to MinerU in v1 — see plan/blog-hIE-TODO.md TODO-9).\n\n"
+        f"> Extracted body from {source_kind} PDF. Stub note: [[@{meta['citekey']}]].\n\n"
     )
     out_path.write_text(front + body, encoding="utf-8")
     return out_path
@@ -226,7 +273,14 @@ def process_one(note_path: Path, dry_run: bool = False) -> dict:
         return {"note": note_path.name, "citekey": meta["citekey"],
                 "status": "parse-failed", "reason": parse_msg}
 
-    out_path = write_fulltext_note(meta, body, kind, pdf_url)
+    # Tag which backend won so the vault is self-documenting
+    if "mineru" in parse_msg:
+        extractor_tag = "mineru-v1"
+    elif "pypdf" in parse_msg:
+        extractor_tag = "pypdf-v0-fallback" if "fell back" in parse_msg else "pypdf-v0"
+    else:
+        extractor_tag = "unknown"
+    out_path = write_fulltext_note(meta, body, kind, pdf_url, extractor_tag)
     return {
         "note": note_path.name,
         "citekey": meta["citekey"],
