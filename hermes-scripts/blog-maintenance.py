@@ -20,13 +20,15 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
-BLOG_DIR = Path.home() / "claw" / "blog"
-BLOG_POSTS = BLOG_DIR / "src" / "content" / "blogs"
+from beatless_config import CONFIG
 
-AUDIT_MD = Path(os.path.expanduser("~/.hermes/shared/.blog-audit.md"))
-STATUS_JSON = Path(os.path.expanduser("~/.hermes/shared/.last-blog-maintenance-status"))
+BLOG_DIR = CONFIG.blog_dir
+BLOG_POSTS = CONFIG.blog_posts_dir
 
-STALE_DAYS = 60
+AUDIT_MD = CONFIG.shared_file(".blog-audit.md")
+STATUS_JSON = CONFIG.shared_file(".last-blog-maintenance-status")
+
+STALE_DAYS = CONFIG.stale_blog_days
 
 
 def audit_blog():

@@ -1,83 +1,135 @@
-# Beatless — Autonomous Agent Constellation
+# Beatless
 
-Hybrid AI orchestration system for open-source contribution, technical blogging, and ML research. Hermes Agent handles scheduling and information gathering; Claude Code handles deep execution.
+Autonomous agent orchestration for open-source contribution, technical writing, and ML research.
 
-## Current State: Constellation v3
+Beatless is a hybrid control plane: a lightweight scheduler watches for useful work, then routes deep execution to Claude Code, Codex, Gemini, GitHub, Zotero, and local experiment workspaces.
 
-```
-Hermes Agent (Kimi K2.6 orchestrator)
-  ├── Cron: 4 active jobs
-  │     ├── GitHub Response    — hourly PR comment triage
-  │     ├── GitHub PR Pipeline — hourly issue discovery → full PR submission
-  │     ├── Auto Research      — 4h experiment analysis cycles
-  │     └── Blog Maintenance   — 12h content audit + writing (MiniMax M2.7)
-  │
-  ├── Models
-  │     ├── Kimi K2.6      — orchestration, planning, review
-  │     ├── Step 3.5 Flash — fast execution, tool chains, web search
-  │     └── MiniMax M2.7   — writing, image gen, TTS, video, documents
-  │
-  └── Wake-gate scripts → Claude Code (on-demand)
-        ├── /github-pr       — 12-phase PR pipeline with triple review
-        ├── /pr-followup     — maintainer comment response
-        └── /exp-*           — ML experiment lifecycle (see below)
-```
+![Beatless framework](docs/assets/framework.png)
 
-## Experiment Command Pack (exp-*)
+## What It Does
 
-Five commands encoding a two-path research methodology for ML experiments:
+| Area | Purpose |
+| --- | --- |
+| GitHub response | Watch open PRs and surface maintainer comments that need action. |
+| GitHub PR pipeline | Discover issues, evaluate repositories, implement fixes, review, and prepare PRs. |
+| Research automation | Resume or halt experiment workspaces based on recorded state. |
+| Paper workflow | Harvest papers, deduplicate against Zotero, and sync metadata into notes. |
+| Dashboard | Show agents, pipelines, experiment status, GPU state, and recent activity. |
+| CLI bridges | Route Claude Code agents through local Codex and Gemini CLIs. |
 
-| Command | Purpose |
-|---------|---------|
-| `/exp-status` | Workspace readiness diagnostic (GPU, data, plugins) |
-| `/exp-init` | Initialize experiment branch, planning files, baseline run |
-| `/exp-discover` | Generate hypotheses via idea-first or application-first path |
-| `/exp-run` | Autonomous experiment loop (quick: single-GPU / full: dual-GPU A/B) |
-| `/exp-review` | Multi-agent review with continue/pivot/rollback/halt verdict |
+## Architecture
 
-Integrates: Codex (code edits), Gemini (literature + direction review), Superpowers (brainstorming), GSD (verification), Planning-with-files (state persistence).
+Beatless separates scheduling from execution.
 
-## PR Pipeline
+- Hermes handles cron, wake gates, lightweight status checks, and routing.
+- Claude Code handles long-running reasoning and command execution.
+- Codex focuses on code edits, feasibility checks, and review.
+- Gemini focuses on literature grounding, large-context review, and critique.
+- Zotero and Obsidian hold research inputs and reading outputs.
+- The dashboard reads JSON state from local collectors and renders it through a decoupled frontend.
 
-12-phase process from issue discovery to PR submission:
+## Repository Layout
 
-1. Discover claimable issues (good first issue, help wanted, bug)
-2. Evaluate repo (CONTRIBUTING.md, recent PRs, test infrastructure)
-3. Fork, clone, baseline tests
-4. Implement fix (Codex write-mode)
-5. Triple review (Gemini correctness + Codex architecture + Claude quality gate)
-6. Submit PR with evidence-based scoring
+| Module | Description |
+| --- | --- |
+| `commands/exp` | Slash commands for experiment status, init, discovery, run, and review. |
+| `commands/agents` | Claude Code agent wrappers for Codex CLI and Gemini CLI. |
+| `hermes-scripts` | Wake-gate scripts for GitHub, Zotero, research, blog, and preflight checks. |
+| `dashboard` | FastAPI backend, SSE stream, and Vite frontend. |
+| `pipelines` | Pipeline behavior specs and operating rules. |
+| `docs`, `design`, `plan` | Architecture notes, migration status, and design records. |
 
-Quality controls: anti-inflation (no self-review), revert-test-reapply verification, minimum 7.5/10 score gate.
+## Quick Start
 
-## Repository Structure
+Create local configuration:
 
-```
-commands/exp/           # Active: exp-* command pack (903 lines)
-design/                 # Architecture: CONSTELLATION v1 → v3 evolution
-standards/              # PR guidelines, contribution protocols
-pipelines/              # Active pipeline specs (github-pr.md, blog-maintenance.md)
-docs/                   # HERMES integration, migration status
-agents/aoi/             # Aoi — scheduler persona (SOUL.md)
-archive/                # Deprecated v2 infrastructure
-  ├── v2-deprecated/    #   Heartbeat agents, shell runners, harness scripts
-  └── deprecated-commands/  #   research-analyze.md, research-train-loop.md
+```bash
+cp .env.example .env.local
 ```
 
-## Planned (Next Stages)
+Fill only the variables you need. Keep real keys in `.env.local` or your private runtime environment. Do not commit secrets.
 
-- **Aoi** — Digital persona on [OpenRoom](https://github.com/MiniMax-AI/OpenRoom) platform. Currently scheduler-only; planned evolution into embodied agent with visual presence.
-- **OpenRoom Integration** — MiniMax-powered desktop environment for Aoi. Workspace, apps, real-time interaction.
-- **Beatless Framework Rewrite** — Current repo serves as architecture documentation and archive. Future rewrite planned to consolidate the Hermes + ClaudeCode hybrid pattern into a clean framework.
+Run the local preflight:
+
+```bash
+python3 hermes-scripts/preflight.py
+```
+
+Run safe dry-runs:
+
+```bash
+python3 hermes-scripts/auto-research.py --dry-run
+python3 hermes-scripts/github-response.py --dry-run
+python3 hermes-scripts/github-pr.py --dry-run --issue-limit 1 --approved-limit 1 --per-query-limit 1 --skip-closed-pr-history
+python3 hermes-scripts/paper-harvest.py --dry-run --max-new 1
+```
+
+## Dashboard
+
+Start the local dashboard:
+
+```bash
+cd dashboard
+./start.sh
+```
+
+Default endpoints:
+
+- UI: `http://127.0.0.1:3720`
+- API: `http://127.0.0.1:3721/api/status`
+- SSE: `http://127.0.0.1:3721/api/events`
+
+The dashboard is intentionally decoupled:
+
+- backend collectors produce JSON only;
+- the frontend consumes the `/api/*` contract;
+- SSE pushes full state every 10 seconds;
+- the default host is local-only.
+
+## Experiment Commands
+
+| Command | Role |
+| --- | --- |
+| `/exp-status` | Check workspace readiness, runtime state, and integration availability. |
+| `/exp-init` | Initialize planning files, branch state, and baseline expectations. |
+| `/exp-discover` | Generate research hypotheses unless the workspace is already halted. |
+| `/exp-run` | Execute or resume an experiment loop with halt/rollback guards. |
+| `/exp-review` | Review the latest round and choose continue, pivot, rollback, or halt. |
+
+Smoke workspaces halt after one verified run. Real experiment workspaces should provide a substantive `program.md` or `Task.md`.
+
+## Public-Repo Safety
+
+This repository is designed to keep machine-specific state out of Git.
+
+Ignored local-only files include:
+
+- `.env`, `.env.local`, and `.env.*.local`
+- `.mcp.json`
+- local dependency folders and Python caches
+- local GSD clones or scratch links
+- local runtime archives
+
+Use `.env.example` as the public template and keep provider keys, Zotero IDs, GitHub tokens, and local paths in private configuration.
 
 ## Requirements
 
-- [Hermes Agent](https://github.com/NousResearch/hermes-agent) v0.10.0+ (gateway + cron)
-- Claude Code CLI (`claude`) with Opus/Sonnet
-- GitHub CLI (`gh`, authenticated)
-- Codex and Gemini available as Claude Code plugins
-- `uv` for Python, `pnpm` for JS/TS
+- Python with `uv`
+- Node.js and npm
+- GitHub CLI (`gh`)
+- Claude Code CLI (`claude`)
+- Codex CLI (`codex`)
+- Gemini CLI (`gemini`)
+- Optional: Hermes Agent, Zotero API access, NVIDIA tooling for GPU experiments
 
 ## License
 
 MIT
+
+## GitHub Impact
+
+Star growth can be viewed with GitHub Star History:
+
+[![Star History Chart](https://api.star-history.com/svg?repos=20bytes/Beatless&type=Date)](https://star-history.com/#20bytes/Beatless&Date)
+
+Direct link: [https://star-history.com/#20bytes/Beatless&Date](https://star-history.com/#20bytes/Beatless&Date)

@@ -25,6 +25,30 @@ Read all available project files:
 
 Summarize current state in ≤5 bullets before proceeding.
 
+### Smoke / Halt Guard
+
+If this is a smoke workspace or the current state is already halted, do not run brainstorming,
+literature search, Codex feasibility, GSD writes, or planning updates.
+
+Treat the workspace as halted when any of these are true:
+- `program.md` describes a smoke/dispatch-verification workspace.
+- `progress.md` says `HALT`, `halted`, or `smoke rule satisfied`.
+- `results.tsv` has a completed smoke baseline and `program.md` says to run at most once.
+
+In that case, return this explicit no-op output and stop:
+
+```
+Experiment Discover — <project-name>
+
+Verdict: HALT
+Reason: smoke workspace already satisfied; no research target exists.
+
+No hypotheses generated.
+No files changed.
+
+Next: create or switch to a real experiment workspace with a substantive program.md or Task.md.
+```
+
 ---
 
 ## Step 1: Research Path Selection
@@ -154,7 +178,7 @@ Invoke Gemini for 2025+ literature search:
 
 ```
 Agent tool:
-  subagent_type: "gemini:gemini-consult"
+  subagent_type: "gemini-cli"
   prompt: "Search academic literature (2025 papers strongly preferred, 2024 acceptable) for: [top 3-4 hypotheses from Step 3].
 
 For each hypothesis:
@@ -171,7 +195,7 @@ Focus on: [target domain from Task.md/program.md]. Return structured, with citat
 Also invoke Gemini as devil's advocate:
 ```
 Agent tool:
-  subagent_type: "gemini:gemini-consult"
+  subagent_type: "gemini-cli"
   prompt: "Play devil's advocate against the top hypothesis: [describe it].
 Attack with: (1) simpler explanation that achieves similar results, (2) prior work that already solved this, (3) fundamental flaw that prevents generalization."
 ```
@@ -186,7 +210,7 @@ Invoke Codex for implementation feasibility:
 
 ```
 Agent tool:
-  subagent_type: "codex:codex-rescue"
+  subagent_type: "codex-cli"
   prompt: "Assess feasibility of these hypotheses against the current codebase at [project root]:
 
 [top 3 hypotheses with one-line descriptions]

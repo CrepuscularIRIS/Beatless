@@ -8,7 +8,7 @@ Different from paper-harvest.py (which is the steady-state cron):
   - Tags each paper with `topic:<slug>` so the Obsidian side can route.
 
 Usage:
-    set -a; source /home/lingxufeng/claw/.env; set +a
+    set -a; source .env.local; set +a
     python3 paper-backfill.py
 
 Tune TOPIC_QUEUES and YEAR_MIN below, then re-run. Safe to re-run — dedups
@@ -138,7 +138,7 @@ def main():
         "failures": failed[:10],
         "created_sample": created[:15],
     }
-    out = os.path.expanduser("~/.hermes/shared/.last-paper-backfill-status")
+    out = str(ph.CONFIG.shared_file(".last-paper-backfill-status"))
     os.makedirs(os.path.dirname(out), exist_ok=True)
     with open(out, "w") as f:
         json.dump(summary, f, indent=2, default=str)

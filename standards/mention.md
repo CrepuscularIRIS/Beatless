@@ -8,7 +8,7 @@
 
 GitHub 本身也在把这种“协作界面”标准化：`CONTRIBUTING.md` 会被专门展示给贡献者，issue/PR 模板可以强制大家按统一信息结构来提问题和改动。([GitHub Docs][1])
 
-## 如果我是 CrepuscularIRIS，我会这样改
+## 如果我是 <your-github-user>，我会这样改
 
 ### 1. 保留内部编排，重做对外表达
 

@@ -1,6 +1,6 @@
 # Audit-Fix Sweep — 2026-04-23
 
-**Owner**: CrepuscularIRIS (maintained by Hermes Agent + Claude Code)
+**Owner**: <your-github-user> (maintained by Hermes Agent + Claude Code)
 **Directive**: execute the 5 "almost-right" fixes consecutively. Audit
 before, verify after. One atomic commit at the end.
 

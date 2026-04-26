@@ -14,10 +14,10 @@ Not a cron job (yet). Manual runs for now; the user wanted to see something in
 the vault. Schedule later once workflow is stable.
 
 Usage:
-    set -a; source /home/lingxufeng/claw/.env; set +a
+    set -a; source .env.local; set +a
     python3 zotero-to-obsidian.py              # incremental sync
     python3 zotero-to-obsidian.py --force      # regenerate all notes
-    python3 zotero-to-obsidian.py --collection VXXHVU7P  # scope to one collection
+    python3 zotero-to-obsidian.py --collection <collection-key>
 """
 import argparse
 import json
@@ -31,12 +31,14 @@ import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
 
-ZOT_KEY = os.environ.get("ZOTERO_API_KEY", "")
-ZOT_USER = os.environ.get("ZOTERO_USER_ID", "")
-VAULT = Path(os.path.expanduser(os.environ.get("OBSIDIAN_VAULT", "~/obsidian-vault")))
-LITERATURE_DIR = VAULT / "papers" / "literature"
+from beatless_config import CONFIG
 
-UA = "zotero-to-obsidian/0.1 (CrepuscularIRIS)"
+ZOT_KEY = CONFIG.zotero_api_key
+ZOT_USER = CONFIG.zotero_user_id
+VAULT = CONFIG.obsidian_vault
+LITERATURE_DIR = CONFIG.literature_dir
+
+UA = f"zotero-to-obsidian/0.1 ({CONFIG.github_author})"
 
 
 def slugify(s, maxlen=40):
@@ -126,7 +128,7 @@ def render_note(item, citekey):
 
     url = d.get("url") or ""
     zotero_key = item.get("key", "")
-    zotero_web_url = f"https://www.zotero.org/lingxufeng/items/{zotero_key}" if zotero_key else ""
+    zotero_web_url = CONFIG.zotero_item_url(zotero_key)
 
     fm_lines = [
         "---",
@@ -172,10 +174,10 @@ def render_note(item, citekey):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--force", action="store_true", help="regenerate even if note exists")
-    # Default to A-Tier collection so cron runs pull quality-guaranteed papers only.
-    # Pass "" or "ALL" to sync whole library.
-    ap.add_argument("--collection", default="5CD5RDNA",
-                    help="collection key (default '5CD5RDNA' = A-Tier). "
+    # Default to the configured curated collection. Pass "" or "ALL" to sync
+    # the whole library.
+    ap.add_argument("--collection", default=CONFIG.zotero_default_collection,
+                    help="collection key from ZOTERO_DEFAULT_COLLECTION. "
                          "Pass 'ALL' to sync entire library.")
     ap.add_argument("--limit", type=int, default=0,
                     help="stop after N items (debug)")
@@ -237,7 +239,7 @@ def main():
         "errors": errors[:20],
         "error_count": len(errors),
     }
-    status_path = os.path.expanduser("~/.hermes/shared/.last-zotero-obsidian-sync")
+    status_path = str(CONFIG.shared_file(".last-zotero-obsidian-sync"))
     os.makedirs(os.path.dirname(status_path), exist_ok=True)
     with open(status_path, "w") as f:
         json.dump(summary, f, indent=2, default=str)

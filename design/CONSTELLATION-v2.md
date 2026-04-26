@@ -89,7 +89,7 @@ claude --print --model claude-sonnet-4-6 --max-turns 30 \
 cd ~/claw/Beatless && \
 claude --print --model claude-sonnet-4-6 --max-turns 25 \
   -p "saturnus" \
-  "Check all open PRs by CrepuscularIRIS for new maintainer comments. For each: \
+  "Check all open PRs by <your-github-user> for new maintainer comments. For each: \
    1. Read the comment thread \
    2. If actionable feedback: implement fix, push, reply \
    3. If question: answer with evidence from code \
@@ -98,7 +98,7 @@ claude --print --model claude-sonnet-4-6 --max-turns 25 \
 ```
 
 **What ClaudeCode does inside**:
-- `gh pr list --author CrepuscularIRIS --state open`
+- `gh pr list --author <your-github-user> --state open`
 - For each PR: `gh pr view <N> --comments`
 - If fix needed: checkout branch, implement, `/codex:review`, push
 - Reply with `gh pr comment`
@@ -231,8 +231,8 @@ WantedBy=timers.target
 # /etc/systemd/system/beatless-heartbeat.service
 [Service]
 Type=oneshot
-User=lingxufeng
-ExecStart=/home/lingxufeng/claw/Beatless/scripts/heartbeat.sh
+User=<your-user>
+ExecStart=$HOME/claw/Beatless/scripts/heartbeat.sh
 ```
 
 ### Option C: Hermes Cron with `script` Field (Recommended Hybrid)
@@ -259,7 +259,7 @@ result = subprocess.run(
     ["claude", "--print", "--model", "claude-sonnet-4-6", "--max-turns", "50",
      "Execute GitHub PR pipeline..."],
     capture_output=True, text=True, timeout=3600,
-    cwd="/home/lingxufeng/workspace"
+    cwd="$HOME/workspace"
 )
 
 # 3. Output result for Hermes to deliver

@@ -9,19 +9,44 @@ Only issues that pass preflight are handed to ClaudeCode via /github-pr.
 Working directory: ~/workspace (where repos are forked/cloned)
 """
 import subprocess
+import argparse
 import json
 import os
 import re
+import sys
 from datetime import datetime, timezone
 
-WORKSPACE = os.path.expanduser("~/workspace")
-CONTRIB_ROOT = os.path.join(WORKSPACE, "contrib")
-PR_STAGE_ROOT = os.path.join(WORKSPACE, "pr-stage")
-STATUS_FILE = os.path.expanduser("~/.hermes/shared/.last-github-pr")
-POLICY_CACHE = os.path.expanduser("~/.hermes/shared/policy-cache.json")
+from beatless_config import CONFIG
+
+WORKSPACE = str(CONFIG.workspace)
+CONTRIB_ROOT = str(CONFIG.contrib_root)
+PR_STAGE_ROOT = str(CONFIG.pr_stage_root)
+STATUS_FILE = str(CONFIG.shared_file(".last-github-pr"))
+POLICY_CACHE = str(CONFIG.shared_file("policy-cache.json"))
 
 LANGUAGES = ["python", "rust", "go", "javascript", "typescript"]
-AUTHOR = "CrepuscularIRIS"
+AUTHOR = CONFIG.github_author
+
+
+def log(message):
+    print(f"[github-pr] {message}", file=sys.stderr, flush=True)
+
+
+def gh_auth_status():
+    try:
+        return subprocess.run(
+            ["gh", "auth", "status"],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        return subprocess.CompletedProcess(
+            ["gh", "auth", "status"],
+            returncode=1,
+            stdout="",
+            stderr=str(exc),
+        )
 
 # Phrases that indicate a repo REJECTS AI-generated contributions.
 # Must co-occur with a prohibition verb in the same sentence.
@@ -48,25 +73,35 @@ CLA_MARKERS = [
 ]
 
 
-def get_claimable_issues():
+def get_claimable_issues(languages=None, labels=None, per_query_limit=2):
     all_issues = []
-    labels = ["good first issue", "help wanted", "bug"]
-    for lang in LANGUAGES:
+    languages = languages or LANGUAGES
+    labels = labels or ["good first issue", "help wanted", "bug"]
+    per_query_limit = max(1, int(per_query_limit))
+    total_queries = len(languages) * len(labels)
+    query_index = 0
+    for lang in languages:
         for label in labels:
+            query_index += 1
+            log(f"discover {query_index}/{total_queries}: language={lang} label={label!r}")
             result = subprocess.run(
                 ["gh", "search", "issues",
                  f"--label={label}",
                  "--state=open", "--sort=updated",
-                 f"--language={lang}", "--limit=2",
+                 f"--language={lang}", f"--limit={per_query_limit}",
                  "--json=number,title,repository,labels"],
                 capture_output=True, text=True, timeout=30
             )
             if result.returncode != 0:
+                tail = (result.stderr or result.stdout or "").strip()[-240:]
+                log(f"discover skipped: language={lang} label={label!r} gh exited {result.returncode}: {tail}")
                 continue
             try:
                 issues = json.loads(result.stdout) or []
+                log(f"discover found {len(issues)} issue(s): language={lang} label={label!r}")
                 all_issues.extend(issues)
             except json.JSONDecodeError:
+                log(f"discover skipped: language={lang} label={label!r} returned invalid JSON")
                 continue
 
     seen = set()
@@ -130,8 +165,10 @@ def scan_cla_required(text):
         return False, ""
     lowered = text.lower()
     for marker in CLA_MARKERS:
-        if marker in lowered:
-            idx = lowered.find(marker)
+        marker_re = re.compile(rf"(?<![a-z0-9]){re.escape(marker)}(?![a-z0-9])")
+        match = marker_re.search(lowered)
+        if match:
+            idx = match.start()
             snippet = lowered[max(0, idx - 60):idx + 180].strip()
             return True, snippet[:240]
     return False, ""
@@ -164,10 +201,24 @@ def scan_closed_prs_for_ai_rejection(repo):
         return False, ""
 
 
-def check_repo_policy(repo, cache):
+def check_repo_policy(repo, cache, scan_closed_history=True):
     """Return dict: {forbids_ai, ai_evidence, needs_cla, cla_evidence, has_contributing}."""
     if repo in cache:
-        return cache[repo]
+        cached = cache[repo]
+        if (
+            not scan_closed_history
+            or cached.get("forbids_ai")
+            or cached.get("closed_history_checked")
+        ):
+            return cached
+        forbids_ai, ai_ev = scan_closed_prs_for_ai_rejection(repo)
+        cached["closed_history_checked"] = True
+        cached["checked_at"] = datetime.now(timezone.utc).isoformat()
+        if forbids_ai:
+            cached["forbids_ai"] = True
+            cached["ai_evidence"] = f"[from closed-PR history] {ai_ev}"
+        cache[repo] = cached
+        return cached
 
     contributing = (
         fetch_repo_file(repo, "CONTRIBUTING.md")
@@ -183,7 +234,7 @@ def check_repo_policy(repo, cache):
     needs_cla, cla_ev = scan_cla_required(combined)
 
     # Secondary: check closed-PR rejection history for off-repo policies
-    if not forbids_ai:
+    if not forbids_ai and scan_closed_history:
         forbids_ai, ai_ev = scan_closed_prs_for_ai_rejection(repo)
         if forbids_ai:
             ai_ev = f"[from closed-PR history] {ai_ev}"
@@ -194,6 +245,7 @@ def check_repo_policy(repo, cache):
         "needs_cla": needs_cla,
         "cla_evidence": cla_ev,
         "has_contributing": bool(contributing),
+        "closed_history_checked": scan_closed_history,
         "checked_at": datetime.now(timezone.utc).isoformat(),
     }
     cache[repo] = result
@@ -249,6 +301,7 @@ BLOCK_LABELS = {
     "blocked", "on hold", "on-hold",
     "status: blocked", "status: on-hold",
     "question", "stale",
+    "bounty", "onboarding", "community",
 }
 
 
@@ -265,7 +318,7 @@ def has_block_label(issue):
     return False, ""
 
 
-def preflight_filter(issues):
+def preflight_filter(issues, scan_closed_history=True):
     """Return (approved, rejected) tuples with reasons.
 
     ONLY DETERMINISTIC GATES run here. Judgment calls (dispute detection,
@@ -275,7 +328,8 @@ def preflight_filter(issues):
     Deterministic gates, in order:
       1. Issue has block-label (wontfix / invalid / needs-design / etc.)
       2. Duplicate open PR already references this issue (Fixes/Closes/Resolves #N)
-      3. Contributing.md exists check (info only — the skill will READ it)
+      3. Repository policy explicitly forbids AI-generated contributions
+      4. Contributing.md exists check (info only — the skill will READ it)
 
     Passing preflight means the issue is worth spending the claude -p session
     on; the session itself runs pr-direction-check for the nuanced verdict.
@@ -284,28 +338,43 @@ def preflight_filter(issues):
     approved = []
     rejected = []
 
-    for issue in issues:
+    total = len(issues)
+    for index, issue in enumerate(issues, 1):
         repo = issue["repository"]["nameWithOwner"]
         number = issue["number"]
+        log(f"preflight {index}/{total}: {repo}#{number}")
 
         # Gate 1: block-label — deterministic
         blocked, lbl = has_block_label(issue)
         if blocked:
             rejected.append((issue, f"Issue has block-label '{lbl}'"))
+            log(f"preflight rejected: {repo}#{number} block-label={lbl!r}")
             continue
 
         # Gate 2: duplicate open PR — deterministic `Fixes #N` grep
         if has_duplicate_pr(repo, number):
             rejected.append((issue, f"Open PR already references #{number}"))
+            log(f"preflight rejected: {repo}#{number} duplicate open PR")
             continue
 
         # Gather the data the skill will judge — but don't judge here.
         # Cache fetched data on the issue so the prompt can pass it along.
-        policy = check_repo_policy(repo, cache)  # fetches CONTRIBUTING.md text
+        policy = check_repo_policy(
+            repo,
+            cache,
+            scan_closed_history=scan_closed_history,
+        )  # fetches CONTRIBUTING.md text
+        if policy.get("forbids_ai"):
+            evidence = (policy.get("ai_evidence") or "").replace("\n", " ")[:180]
+            rejected.append((issue, f"Repository policy forbids AI contributions: {evidence}"))
+            log(f"preflight rejected: {repo}#{number} AI contribution policy")
+            continue
+
         comments = _fetch_issue_comments(repo, number)
         issue["_policy"] = policy
         issue["_comments"] = comments[-20:]  # last 20 for the skill
         approved.append(issue)
+        log(f"preflight approved: {repo}#{number}")
 
     save_policy_cache(cache)
     return approved, rejected
@@ -326,19 +395,93 @@ def write_status(status, detail="", extra=None):
         json.dump(payload, f)
 
 
+def parse_args():
+    ap = argparse.ArgumentParser()
+    ap.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="discover and preflight candidate issues without invoking ClaudeCode",
+    )
+    ap.add_argument(
+        "--issue-limit",
+        type=int,
+        default=12,
+        help="number of discovered issues to preflight before handing off",
+    )
+    ap.add_argument(
+        "--approved-limit",
+        type=int,
+        default=5,
+        help="maximum approved candidates to include in the handoff",
+    )
+    ap.add_argument(
+        "--languages",
+        default=",".join(LANGUAGES),
+        help="comma-separated GitHub search languages",
+    )
+    ap.add_argument(
+        "--labels",
+        default="good first issue,help wanted,bug",
+        help="comma-separated GitHub issue labels to search",
+    )
+    ap.add_argument(
+        "--per-query-limit",
+        type=int,
+        default=2,
+        help="number of issues fetched per language/label query",
+    )
+    ap.add_argument(
+        "--skip-closed-pr-history",
+        action="store_true",
+        help="skip expensive closed-PR AI-policy history scan; useful for first local smoke tests",
+    )
+    return ap.parse_args()
+
+
+def split_csv(raw):
+    return [part.strip() for part in raw.split(",") if part.strip()]
+
+
 def main():
+    args = parse_args()
+    auth = gh_auth_status()
+    if auth.returncode != 0:
+        detail = (auth.stderr or auth.stdout or "").strip()
+        write_status("github-auth-failed", detail)
+        print(json.dumps({
+            "wakeAgent": False,
+            "status": "github-auth-failed",
+            "detail": detail,
+            "next": "Run `gh auth login -h github.com`, then retry the dry-run.",
+        }, indent=2, ensure_ascii=False))
+        return
+
     os.makedirs(WORKSPACE, exist_ok=True)
     os.makedirs(CONTRIB_ROOT, exist_ok=True)
     os.makedirs(PR_STAGE_ROOT, exist_ok=True)
 
-    raw_issues = get_claimable_issues()
+    languages = split_csv(args.languages)
+    labels = split_csv(args.labels)
+    mode = "dry-run" if args.dry_run else "real run"
+    log(f"start {mode}: languages={languages} labels={labels} per_query_limit={args.per_query_limit}")
+    raw_issues = get_claimable_issues(
+        languages=languages,
+        labels=labels,
+        per_query_limit=args.per_query_limit,
+    )
     if not raw_issues:
         write_status("no-issues-found")
         print(json.dumps({"wakeAgent": False}))
         return
 
-    approved, rejected = preflight_filter(raw_issues[:12])
-    approved = approved[:5]
+    issue_limit = max(1, args.issue_limit)
+    approved_limit = max(1, args.approved_limit)
+    log(f"preflight input: {min(len(raw_issues), issue_limit)} of {len(raw_issues)} discovered issue(s)")
+    approved, rejected = preflight_filter(
+        raw_issues[:issue_limit],
+        scan_closed_history=not args.skip_closed_pr_history,
+    )
+    approved = approved[:approved_limit]
 
     if rejected:
         print("Preflight rejections:")
@@ -366,6 +509,52 @@ def main():
             f"- {repo}#{issue['number']}: {issue['title']}{flag_str}"
         )
     issue_list = "\n".join(issue_lines)
+
+    if args.dry_run:
+        payload = {
+            "wakeAgent": False,
+            "dryRun": True,
+            "rawIssueCount": len(raw_issues),
+            "issueLimit": issue_limit,
+            "approvedLimit": approved_limit,
+            "languages": languages,
+            "labels": labels,
+            "perQueryLimit": max(1, args.per_query_limit),
+            "approvedCount": len(approved),
+            "rejectedCount": len(rejected),
+            "approved": [
+                {
+                    "repo": issue["repository"]["nameWithOwner"],
+                    "number": issue["number"],
+                    "title": issue.get("title", ""),
+                    "labels": [
+                        (label.get("name") if isinstance(label, dict) else str(label))
+                        for label in issue.get("labels", [])
+                    ],
+                    "policy": issue.get("_policy", {}),
+                }
+                for issue in approved
+            ],
+            "rejected": [
+                {
+                    "repo": issue["repository"]["nameWithOwner"],
+                    "number": issue["number"],
+                    "title": issue.get("title", ""),
+                    "reason": reason,
+                }
+                for issue, reason in rejected
+            ],
+        }
+        write_status(
+            "dry-run",
+            f"{len(approved)} approved, {len(rejected)} rejected",
+            extra={
+                "approved_count": len(approved),
+                "rejected_count": len(rejected),
+            },
+        )
+        print(json.dumps(payload, indent=2, ensure_ascii=False)[:6000])
+        return
 
     # Build the direction-check input blob for each candidate — the skill
     # reads this to make the judgment call Python can't reliably make.
@@ -432,9 +621,9 @@ def main():
     )
 
     result = subprocess.run(
-        ["claude", "-p", "--model", "sonnet",
+        [CONFIG.claude_bin, "-p", "--model", CONFIG.claude_model,
          "--dangerously-skip-permissions",
-         "--max-budget-usd", "5.00",
+         "--max-budget-usd", CONFIG.claude_max_budget_usd,
          prompt],
         capture_output=True, text=True,
         timeout=7200,
@@ -463,7 +652,7 @@ def main():
     score_match = re.search(r'PIPELINE_QUALITY_SCORE:\s*([0-9]+(?:\.[0-9]+)?)', stdout)
     score = float(score_match.group(1)) if score_match else None
 
-    QUALITY_THRESHOLD = 7.0
+    QUALITY_THRESHOLD = CONFIG.github_pr_quality_threshold
 
     if pipeline_match:
         status = pipeline_match.group(1).strip()

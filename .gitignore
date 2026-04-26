@@ -1,6 +1,21 @@
 .claude/
+.codex
+.env
+.env.local
+.env.*.local
+.mcp.json
+README.local.md
+
+# Local external clones / scratch links
+gsd-2
+gsd-2/
+gsd-2.empty-before-link/
 
 scripts/__pycache__/
+hermes-scripts/__pycache__/
+dashboard/backend/__pycache__/
+dashboard/backend/.venv/
+dashboard/frontend/node_modules/
 
 runtime/scheduler/.scheduler.lock
 runtime/jobs/*
@@ -13,3 +28,6 @@ runtime/nlm/*
 runtime/soak/*
 !runtime/soak/.gitkeep
 .gemini-tasks/
+
+# Local/deprecated runtime archives
+archive/

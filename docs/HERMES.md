@@ -1,14 +1,14 @@
 # Beatless Agent System — Shared Execution Protocol
 
-> This file is loaded by all Hermes agents when cwd is /home/lingxufeng/claw
+> This file is loaded by all Hermes agents when cwd is $HOME/claw
 
 ## Execution Policy (ALL AGENTS)
 
 You are a **router, not a worker**. Your native model (Step 3.5 Flash or MiniMax M2.7) handles decision-making only. All substantive work is dispatched to external CLIs via the `terminal` tool.
 
-### Unified Execution Lane — ClaudeCodeCli ONLY
+### Unified Execution Lane — ClaudeCodeCli Primary
 
-All work routes through a SINGLE external CLI. Codex and Gemini are accessed as **internal plugins** within ClaudeCode, never as separate binaries.
+Default Hermes work routes through ClaudeCodeCli. Experiment commands (`/exp-*`) use dedicated Claude Code user agents, `codex-cli` and `gemini-cli`, which wrap the local Codex and Gemini CLIs behind the Agent tool.
 
 ### Command Templates (with timeouts and --max-turns)
 
@@ -53,7 +53,7 @@ If `/gemini:consult` times out:
 2. Proceed with Codex-only verdict (Stage-1 is sufficient for non-critical reviews)
 3. Flag to Aoi for retry in next heartbeat cycle
 
-**NEVER call `codex` or `gemini` as separate CLI binaries.** Architecture violation.
+Do not call `codex` or `gemini` ad hoc from a MainAgent terminal. Use ClaudeCodeCli, or use the dedicated `codex-cli` / `gemini-cli` Agent bridge when running `/exp-*`.
 
 ### Preflight Check (MANDATORY before /codex:review or /gsd-*)
 
@@ -109,13 +109,15 @@ node ~/.hermes/shared/scripts/mail.mjs list
 
 ## Model Routing Rules
 
-All substantive work flows through ClaudeCodeCli. Codex and Gemini are INTERNAL plugins.
+Default substantive work flows through ClaudeCodeCli. Experiment workflows may route Codex/Gemini through the dedicated Agent bridge agents.
 
 | Task Type | Command | Route |
 |-----------|---------|-------|
 | Code/analysis/files | `claude --print "<prompt>"` | Sonnet 4.6 direct |
 | Code review | `claude --print "/codex:review ..."` | Sonnet → Codex plugin |
 | Deep research | `claude --print "/gemini:consult ..."` | Sonnet → Gemini plugin |
+| Experiment code edits | Agent `codex-cli` | Claude Agent → local Codex CLI |
+| Experiment literature review | Agent `gemini-cli` | Claude Agent → local Gemini CLI |
 | Parallel scanning | `claude --print --agents '[...]' "<prompt>"` | Sonnet AgentTeam |
 | GSD pipeline | `claude --print "/gsd-* ..."` | Sonnet → GSD orchestrator |
 | TTS/voice | MiniMax API (via minimax-multimodal skill) | speech-2.8-hd |
@@ -124,7 +126,7 @@ All substantive work flows through ClaudeCodeCli. Codex and Gemini are INTERNAL 
 | Music generation | MiniMax API (via minimax-multimodal skill) | music-2.5+ |
 
 **Never use MiniMax M2.7 for code, research, or review** — it hallucinates tool usage.
-**Never call `codex` or `gemini` as separate CLI binaries** — architecture violation.
+**Never call `codex` or `gemini` as loose terminal commands** — use ClaudeCodeCli fallback commands or the dedicated `codex-cli` / `gemini-cli` Agent bridge.
 
 ## Review Protocol (4-Stage, Satonus-owned)
 
@@ -203,7 +205,7 @@ timeout 300 claude --print --model claude-sonnet-4-6 --max-turns 10 \
 
 All MiniMax-generated assets go to:
 ```
-/home/lingxufeng/claw/output/minimax/
+$HOME/claw/output/minimax/
 ├── images/           # image-01 output
 ├── audio/tts/        # speech-2.8-hd output
 ├── audio/music/      # music-2.5+ output
@@ -306,30 +308,30 @@ node ~/.hermes/shared/scripts/session-lock.mjs release --agent <your-name>
 
 ## Git Repository Warning
 
-**`/home/lingxufeng/claw` is NOT a git repository.** For any git operations, code review (`/codex:review`), or PR workflows, you MUST `cd` into an actual git repo first:
+**`$HOME/claw` is NOT a git repository.** For any git operations, code review (`/codex:review`), or PR workflows, you MUST `cd` into an actual git repo first:
 
 ```bash
 # For Beatless repo operations
-cd /home/lingxufeng/claw/Beatless && claude --print --model claude-sonnet-4-6 "/codex:review ..."
+cd $HOME/claw/Beatless && claude --print --model claude-sonnet-4-6 "/codex:review ..."
 
 # For OpenRoom
-cd /home/lingxufeng/claw/OpenRoom && claude --print ...
+cd $HOME/claw/OpenRoom && claude --print ...
 
 # For cloned repos
-cd /home/lingxufeng/workspace/ghsim/<repo> && claude --print ...
+cd $HOME/workspace/ghsim/<repo> && claude --print ...
 ```
 
 ## Key Paths
 
 | Path | Purpose | Git Repo? |
 |------|---------|-----------|
-| `/home/lingxufeng/claw` | Main workspace (NOT a git repo) | **No** |
-| `/home/lingxufeng/claw/Beatless` | Beatless agent repo | Yes |
-| `/home/lingxufeng/claw/OpenRoom` | React frontend monorepo | Yes |
-| `/home/lingxufeng/workspace/` | GitHub workspace for cloned repos | — |
-| `/home/lingxufeng/workspace/ghsim/` | GitHub issue simulation repos | Yes (per repo) |
-| `/home/lingxufeng/workspace/pr-stage/` | PR artifacts staging | — |
-| `/home/lingxufeng/blog/` | Astro blog site | Yes |
+| `$HOME/claw` | Main workspace (NOT a git repo) | **No** |
+| `$HOME/claw/Beatless` | Beatless agent repo | Yes |
+| `$HOME/claw/OpenRoom` | React frontend monorepo | Yes |
+| `$HOME/workspace/` | GitHub workspace for cloned repos | — |
+| `$HOME/workspace/ghsim/` | GitHub issue simulation repos | Yes (per repo) |
+| `$HOME/workspace/pr-stage/` | PR artifacts staging | — |
+| `$HOME/blog/` | Astro blog site | Yes |
 | `~/.hermes/shared/mailbox/` | Inter-agent mailbox | — |
 | `~/.hermes/shared/pipelines/` | Pipeline state machines | — |
 | `~/.hermes/shared/queue.md` | Task backlog | — |

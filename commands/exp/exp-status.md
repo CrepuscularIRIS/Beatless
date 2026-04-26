@@ -46,23 +46,29 @@ command -v python && python --version
 - `progress.md` — run history
 - `results.tsv` — experiment ledger (header valid?)
 
-### 7. Plugin Availability
-Test each plugin non-destructively. Report available/unavailable:
+### 7. Integration Availability
+Test each integration non-destructively. Report available/unavailable:
 
-| Plugin | How to check | Role |
-|--------|-------------|------|
-| Codex | Agent tool responds with subagent_type "codex:codex-rescue" | Code edits |
-| Gemini | Agent tool responds with subagent_type "gemini:gemini-consult" | Literature + review |
+| Integration | How to check | Role |
+|-------------|-------------|------|
+| Codex CLI | Agent tool responds with subagent_type "codex-cli" | Code edits |
+| Gemini CLI | Agent tool responds with subagent_type "gemini-cli" | Literature + review |
 | Superpowers | Skill tool "superpowers:brainstorming" loads | Parallel brainstorming |
 | GSD | MCP tools mcp__plugin_gsd_gsd__* accessible | Verification + metrics |
 | Planning-with-files | Skill "planning-with-files:status" loads | State persistence |
 
-Do NOT actually invoke plugins — just confirm they're reachable.
+For Codex CLI and Gemini CLI, invoke only a lightweight Agent readiness prompt:
+```
+Readiness check only. Verify the local CLI bridge is usable. Do not edit files.
+```
+Do not run experiments or code edits during status checks.
 
 ### 8. Session Continuity
 - If progress.md exists with running PIDs → check if still alive
 - If results.tsv has entries → report last experiment and best metric
 - If previous session crashed → report recovery instructions
+- If progress.md or findings.md says HALT / halted / smoke rule satisfied, report `Next: none`
+  unless the user explicitly asks to create a new experiment workspace.
 
 ## Output Format
 
@@ -79,12 +85,12 @@ Branch:  [name or detached]
 | Data             | PASS   | cache valid                |
 | Planning files   | WARN   | progress.md missing        |
 | Results ledger   | PASS   | 12 experiments, best 0.89  |
-| Codex            | PASS   | available                  |
-| Gemini           | FAIL   | timeout                    |
+| Codex CLI        | PASS   | available                  |
+| Gemini CLI       | FAIL   | timeout                    |
 | Superpowers      | PASS   | available                  |
 | GSD              | PASS   | MCP connected              |
 | Planning-w-files | PASS   | available                  |
 
 Blocking: [none / list with fix commands]
-Next: /exp-init or /exp-run resume
+Next: [/exp-init / /exp-run resume / none if halted]
 ```

@@ -1,7 +1,7 @@
 # Autonomous Research OS — Roadmap
 
 **Created**: 2026-04-23
-**Owner**: CrepuscularIRIS (maintained by Hermes Agent + Claude Code)
+**Owner**: <your-github-user> (maintained by Hermes Agent + Claude Code)
 **Supersedes / extends**: `2026-04-23-personal-research-automation-system.md`
 **Status**: decisions locked 2026-04-23 — ready to execute
 
@@ -244,7 +244,7 @@ Rules:
 1. `git -C ~/claw/<each-repo> log --since=24h --stat` — raw commit history.
 2. `cat ~/.hermes/shared/.last-*-status` — cron job results from the day.
 3. `find ~/obsidian-vault -mtime -1 -name "*.md"` — new/changed KB notes.
-4. `gh search prs --author=CrepuscularIRIS --state=all --sort=updated --limit=20` — PR activity.
+4. `gh search prs --author=<your-github-user> --state=all --sort=updated --limit=20` — PR activity.
 5. `hermes sessions list --since 24h` — session history.
 6. `journalctl --user -u hermes-gateway --since "24 hours ago"` — gateway log tail, filtered.
 

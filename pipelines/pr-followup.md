@@ -130,7 +130,7 @@ If invoked manually without a wake payload:
 ```bash
 gh api notifications --jq '.[] | select(.subject.type == "PullRequest") | {repo: .repository.full_name, title: .subject.title, reason: .reason, url: .subject.url}'
 
-gh search prs --author=CrepuscularIRIS --state=open \
+gh search prs --author=<your-github-user> --state=open \
   --json repository,title,number,reviewDecision,statusCheckRollup --limit=20
 ```
 

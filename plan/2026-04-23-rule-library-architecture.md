@@ -1,7 +1,7 @@
 # Rule Library Architecture — Zotero → Obsidian → Experiments
 
 **Created**: 2026-04-23
-**Owner**: CrepuscularIRIS (maintained by Hermes Agent + Claude Code)
+**Owner**: <your-github-user> (maintained by Hermes Agent + Claude Code)
 **Status**: first draft — describes the user's stated philosophy and
 translates it into a concrete schema the pipeline can implement.
 Supersedes the vague "Phase 2 curation" description in the roadmap.

@@ -1,4 +1,0 @@
-[meta-harness] dry-run mode
-run_id=mh-20260405-005825-2486
-model=stepfun/step-3.5-flash
-worktree=/home/yarizakurahime/claw/Beatless/runtime/worktrees/mh-20260405-005825-2486

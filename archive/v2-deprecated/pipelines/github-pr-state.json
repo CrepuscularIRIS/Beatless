@@ -1,7 +1,0 @@
-{
-  "name": "github-pr",
-  "status": "IDLE",
-  "interval_hours": 2.5,
-  "description": "Auto PR pipeline \u2014 discovers issues, fixes, and submits PRs every 2.5h",
-  "last_run": ""
-}

@@ -24,17 +24,22 @@ If `$ARGUMENTS` is "resume" or `progress.md` exists with prior rounds:
 - If last round finished → continue at round N+1
 - NEVER restart from round 1 if higher rounds are recorded
 
-### Plugin readiness (test once at startup)
+### Integration readiness (test once at startup)
 
-| Plugin | Invocation | Fallback |
-|--------|-----------|----------|
-| Codex | Agent tool → subagent_type `codex:codex-rescue` | Claude Edit + Bash test |
-| Gemini | Agent tool → subagent_type `gemini:gemini-consult` | WebSearch + Claude reads key files |
+| Integration | Invocation | Fallback |
+|-------------|-----------|----------|
+| Codex CLI | Agent tool → subagent_type `codex-cli` | Claude Edit + Bash test |
+| Gemini CLI | Agent tool → subagent_type `gemini-cli` | WebSearch + Claude reads key files |
 | GSD | MCP `mcp__plugin_gsd_gsd__gsd_record_metric` | Direct file writes |
 | Planning-with-files | Skill `planning-with-files:plan` | Direct file writes |
 | Superpowers | Skill `superpowers:brainstorming` | Claude generates ideas directly |
 
-Test each once. Record availability in `progress.md`. Do NOT retry failed plugins during the loop.
+For Codex CLI and Gemini CLI, invoke each Agent once with prompt:
+```
+Readiness check only. Verify the local CLI bridge is usable. Do not edit files.
+```
+
+Record `READY` / `UNAVAILABLE` in `progress.md`. Do NOT retry failed integrations during the loop.
 
 ---
 
@@ -71,7 +76,7 @@ Read best prior metric from `results.tsv` (lowest non-zero val_bpb or primary me
 Invoke Codex for code changes:
 ```
 Agent tool:
-  subagent_type: "codex:codex-rescue"
+  subagent_type: "codex-cli"
   prompt: "Apply this single experiment to train.py only: [experiment description].
   Keep changes minimal and coherent. Do not add imports for new packages.
   Do not modify prepare.py or any other file."
@@ -182,7 +187,7 @@ For each, specify in `task_plan.md`:
 
 ```
 Agent tool:
-  subagent_type: "codex:codex-rescue"
+  subagent_type: "codex-cli"
   prompt: "Implement two experiments for [project root]:
 
   Experiment A (GPU0): [hypothesis]
@@ -211,7 +216,7 @@ Neither script forks a second training. Log dirs are separated. If any check fai
 
 ```
 Agent tool:
-  subagent_type: "gemini:gemini-consult"
+  subagent_type: "gemini-cli"
   prompt: "For hypotheses A: [one line] and B: [one line] in [project domain]:
   1. 3-5 closest 2025+ papers (title, venue, year, takeaway)
   2. Closest to hypothesis A? Closest to B?

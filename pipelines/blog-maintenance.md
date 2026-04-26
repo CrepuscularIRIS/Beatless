@@ -24,7 +24,7 @@ Previous versions put Codex/Gemini calls inside a `claude --print` prompt, where
 - Content path: `~/blog/src/content/blogs/<slug>/index.mdx`
 - Build command: `cd ~/blog && pnpm build`
 - Author: CS PhD, focus on AI/ML, EEG/BCI, agent systems
-- GitHub: CrepuscularIRIS
+- GitHub: <your-github-user>
 
 ---
 

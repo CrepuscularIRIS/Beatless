@@ -286,7 +286,7 @@ MiniMax skills: `MINIMAX_TTS_MODEL`, `MINIMAX_IMAGE_MODEL`, `MINIMAX_MODEL_HIGHS
 ## 10. File Map
 
 ```
-/home/lingxufeng/claw/
+$HOME/claw/
 ├── .openclaw/                    # Gateway, agents, skills
 │   ├── openclaw.json            # Main config
 │   ├── workspace-{5}/           # Agent workspaces

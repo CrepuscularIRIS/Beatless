@@ -27,7 +27,7 @@ Summarize: rounds completed, current best metric, recent trajectory (improving /
 
 ```
 Agent tool:
-  subagent_type: "codex:codex-rescue"
+  subagent_type: "codex-cli"
   prompt: "Review the current experiment diff in [project root].
 
 Check:
@@ -46,7 +46,7 @@ Be specific: cite file, line, and what's wrong."
 
 ```
 Agent tool:
-  subagent_type: "gemini:gemini-consult"
+  subagent_type: "gemini-cli"
   prompt: "Research direction review for [project description].
 
 Current state:

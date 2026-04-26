@@ -16,21 +16,24 @@ import json
 import os
 import re
 import time
+import argparse
 import urllib.parse
 import urllib.request
 import xml.etree.ElementTree as ET
 from datetime import datetime, timezone
 from pathlib import Path
 
-MARKER = os.path.expanduser("~/.hermes/shared/.last-paper-harvest")
-STATUS_FILE = os.path.expanduser("~/.hermes/shared/.last-paper-harvest-status")
+from beatless_config import CONFIG
 
-ZOT_KEY = os.environ.get("ZOTERO_API_KEY", "")
-ZOT_USER = os.environ.get("ZOTERO_USER_ID", "")
+MARKER = str(CONFIG.shared_file(".last-paper-harvest"))
+STATUS_FILE = str(CONFIG.shared_file(".last-paper-harvest-status"))
+
+ZOT_KEY = CONFIG.zotero_api_key
+ZOT_USER = CONFIG.zotero_user_id
 # Parent collection "Auto-Harvest" (kept for backward compat only).
-AUTO_HARVEST_COLLECTION = "VXXHVU7P"
+AUTO_HARVEST_COLLECTION = CONFIG.zotero_auto_harvest_collection
 
-UA = "paper-harvest/0.1 (https://github.com/CrepuscularIRIS; +research)"
+UA = f"paper-harvest/0.1 ({CONFIG.user_agent_contact})"
 HEADERS = {"User-Agent": UA}
 
 MAX_PER_TICK = 20
@@ -40,8 +43,8 @@ EARLIEST_YEAR = 2025  # user said post-2025 only
 # Two target collections:
 #   A-Tier  — CCF-A venue papers (primary target, quality-guaranteed)
 #   Scouting — famous-lab arXiv drops (secondary, pre-publication material)
-A_TIER_COLLECTION = "5CD5RDNA"
-SCOUTING_COLLECTION = "SIDPSB39"
+A_TIER_COLLECTION = CONFIG.zotero_a_tier_collection
+SCOUTING_COLLECTION = CONFIG.zotero_scouting_collection
 
 # Famous labs — used to filter arXiv results by affiliation signal.
 # Match is case-insensitive substring; present in author comment or affiliation
@@ -511,7 +514,28 @@ def is_duplicate(zot_item, existing):
     return False
 
 
+def parse_args():
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="fetch and deduplicate candidates, but do not write to Zotero",
+    )
+    parser.add_argument(
+        "--max-new",
+        type=int,
+        default=MAX_PER_TICK,
+        help=f"maximum new items to write, or to report in dry-run (default: {MAX_PER_TICK})",
+    )
+    return parser.parse_args()
+
+
 def main():
+    args = parse_args()
+    if args.max_new < 1:
+        print("ERROR: --max-new must be >= 1")
+        return 1
+
     if not ZOT_KEY or not ZOT_USER:
         print("ERROR: ZOTERO_API_KEY / ZOTERO_USER_ID not in env")
         return 1
@@ -519,11 +543,13 @@ def main():
     os.makedirs(os.path.dirname(STATUS_FILE), exist_ok=True)
     summary = {
         "started_at": datetime.now(timezone.utc).isoformat(),
-        "max_per_tick": MAX_PER_TICK,
+        "dry_run": args.dry_run,
+        "max_per_tick": args.max_new,
         "existing_items": 0,
         "arxiv_fetched": 0,
         "openreview_fetched": 0,
         "cvf_fetched": 0,
+        "fresh_candidates": 0,
         "new_items_posted": 0,
         "skipped_duplicates": 0,
         "created_keys": [],
@@ -599,12 +625,15 @@ def main():
             existing.add(it["url"].strip().lower())
         if it.get("title"):
             existing.add(("title", it["title"].strip().lower()[:80]))
-        if len(fresh) >= MAX_PER_TICK:
+        if len(fresh) >= args.max_new:
             break
-    print(f"   {len(fresh)} fresh (capped at {MAX_PER_TICK})")
+    summary["fresh_candidates"] = len(fresh)
+    print(f"   {len(fresh)} fresh (capped at {args.max_new})")
 
     # --- Push ---
-    if fresh:
+    if args.dry_run:
+        print(f"== step 6: dry-run, not writing {len(fresh)} candidate items to Zotero ==")
+    elif fresh:
         print(f"== step 6: push to Zotero ({len(fresh)} items) ==")
         created, failed = zot_post_items(fresh)
         summary["new_items_posted"] = len(created)
@@ -618,7 +647,8 @@ def main():
     summary["finished_at"] = datetime.now(timezone.utc).isoformat()
     with open(STATUS_FILE, "w") as f:
         json.dump(summary, f, indent=2, default=str)
-    Path(MARKER).touch()
+    if not args.dry_run:
+        Path(MARKER).touch()
     return 0
 
 

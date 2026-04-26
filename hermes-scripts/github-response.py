@@ -11,16 +11,19 @@ must not be ignored.
 Working directory: ~/workspace (where repos are cloned)
 """
 import subprocess
+import argparse
 import json
 import os
 import re
 from datetime import datetime, timezone
 
-AUTHOR = "CrepuscularIRIS"
-MARKER = os.path.expanduser("~/.hermes/shared/.last-github-response")
-STATUS_FILE = os.path.expanduser("~/.hermes/shared/.last-github-response-status")
-WORKSPACE = os.path.expanduser("~/workspace")
-PR_STAGE_ROOT = os.path.join(WORKSPACE, "pr-stage")
+from beatless_config import CONFIG
+
+AUTHOR = CONFIG.github_author
+MARKER = str(CONFIG.shared_file(".last-github-response"))
+STATUS_FILE = str(CONFIG.shared_file(".last-github-response-status"))
+WORKSPACE = str(CONFIG.workspace)
+PR_STAGE_ROOT = str(CONFIG.pr_stage_root)
 
 
 def get_open_prs():
@@ -179,13 +182,31 @@ def write_status(payload):
         json.dump(payload, f, indent=2)
 
 
+def parse_args():
+    ap = argparse.ArgumentParser()
+    ap.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="inspect open PRs and write status without invoking ClaudeCode",
+    )
+    return ap.parse_args()
+
+
 def main():
+    args = parse_args()
     os.makedirs(os.path.dirname(MARKER), exist_ok=True)
     os.makedirs(WORKSPACE, exist_ok=True)
     os.makedirs(PR_STAGE_ROOT, exist_ok=True)
 
     prs = get_open_prs()
     if not prs:
+        write_status({
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "dry_run": args.dry_run,
+            "total_open_prs": 0,
+            "actionable_count": 0,
+            "overview": [],
+        })
         print(json.dumps({"wakeAgent": False}))
         return
 
@@ -208,6 +229,7 @@ def main():
 
     write_status({
         "timestamp": datetime.now(timezone.utc).isoformat(),
+        "dry_run": args.dry_run,
         "total_open_prs": len(prs),
         "actionable_count": len(actionable),
         "overview": overview,
@@ -222,6 +244,24 @@ def main():
         f"  [{reason}; ci={ci}]"
         for p, reason, ci in actionable
     )
+
+    if args.dry_run:
+        print(json.dumps({
+            "wakeAgent": False,
+            "dryRun": True,
+            "actionableCount": len(actionable),
+            "actionable": [
+                {
+                    "repo": p["repository"]["nameWithOwner"],
+                    "number": p["number"],
+                    "title": p["title"],
+                    "reason": reason,
+                    "ci": ci,
+                }
+                for p, reason, ci in actionable
+            ],
+        }, indent=2))
+        return
 
     prompt = (
         f"/pr-followup\n\n"
@@ -259,7 +299,7 @@ def main():
     )
 
     result = subprocess.run(
-        ["claude", "-p", "--model", "sonnet",
+        [CONFIG.claude_bin, "-p", "--model", CONFIG.claude_model,
          "--dangerously-skip-permissions",
          prompt],
         capture_output=True, text=True,

@@ -12,7 +12,7 @@
 ```yaml
 model:
   default: "kimi-k2.6"          # Orchestrator (Lacia)
-  provider: "kimi-coding"       # Built-in provider, auto-detects sk-kimi- prefix
+  provider: "kimi-coding"       # Built-in provider, auto-detects <provider-key-prefix> prefix
 
 providers:
   step:                         # Named custom provider for Step 3.5 Flash
@@ -91,7 +91,7 @@ All scripts follow the same pattern:
 
 | Script | Check Logic | ClaudeCode Command | CWD |
 |--------|-------------|-------------------|-----|
-| `github-response.py` | `gh search prs --author=CrepuscularIRIS` + activity marker | `/pr-followup` | `~/workspace` |
+| `github-response.py` | `gh search prs --author=<your-github-user>` + activity marker | `/pr-followup` | `~/workspace` |
 | `github-pr.py` | `gh search issues --label=good first issue,help wanted,bug` | `/github-pr` | `~/workspace` |
 | `auto-research.py` | Glob `~/research/**/outputs/*/` + freshness marker | `/analyze-results` | experiment dir |
 | `blog-maintenance.py` | Check `~/claw/blog/` exists | (none — Hermes native) | — |

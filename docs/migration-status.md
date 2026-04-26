@@ -223,7 +223,7 @@
 ```bash
 # In tmux session for persistence
 tmux new -s stepfun-bridge
-cd /home/lingxufeng/claw
+cd $HOME/claw
 source hermes-agent/venv/bin/activate
 node ~/.hermes/shared/scripts/stepfun-bridge.mjs
 ```

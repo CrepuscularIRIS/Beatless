@@ -1,7 +1,7 @@
 # Personal Research & Knowledge Automation System — Long-Term Plan
 
 **Created**: 2026-04-23
-**Owner**: CrepuscularIRIS (maintained by Hermes Agent + Claude Code)
+**Owner**: <your-github-user> (maintained by Hermes Agent + Claude Code)
 **Status**: living document — revise as the system matures
 
 ---
@@ -103,7 +103,7 @@ Gateway: systemd user unit, 17h uptime, no crashes.
 - `/research-init` — superseded by `/exp-init`
 - `/research-analyze` — superseded by `/exp-discover`
 - `/research-train-loop` — superseded by `/exp-run`
-- These still sit in `~/.claude/commands/` dated 2026-04-20 and contain stale `/home/yarizakurahime/` paths. Archive them.
+- These still sit in `~/.claude/commands/` dated 2026-04-20 and contain stale `/home/<previous-local-user>/` paths. Archive them.
 
 **GitHub pipeline** (recently hardened):
 - `/github-pr` v8 — preflight → evaluate → setup → reproduce → plan → implement → verify → triple-review → submit → report. Bound to all 7 `Beatless/standards/` files + pua methodology for internal rigor.
@@ -156,7 +156,7 @@ Installed skills under `~/.hermes/skills/`:
 
 1. **Retire deprecated research commands** — archive `research-init.md`, `research-analyze.md`, `research-train-loop.md` OR rewrite their top lines to `DEPRECATED — see /exp-*` so they can't be accidentally run.
 2. **Rewire `auto-research.py`** from `/analyze-results` (which still exists but is the old path) to `/exp-run resume` so the cron actually uses the current research pipeline.
-3. **Clean stale `/home/yarizakurahime/` references** in any remaining command files.
+3. **Clean stale `/home/<previous-local-user>/` references** in any remaining command files.
 4. **Upgrade `blog-maintenance.py`** from stub to real prompt — invokes `/blog-maintenance` slash command with MiniMax model override, points at `~/claw/blog`. Leave 3-section template as TODO placeholder.
 5. **Confirm model routing still healthy** after config changes (context_length additions).
 
@@ -166,7 +166,7 @@ Stock is intentionally left untouched — postponed per user instruction.
 
 ## 8. Success Criteria (how we know the system is working)
 
-- [ ] Every open PR in `CrepuscularIRIS/*` has either passing CI or a human-tone reply explaining the status, within one cron tick of an event.
+- [ ] Every open PR in `<your-github-user>/*` has either passing CI or a human-tone reply explaining the status, within one cron tick of an event.
 - [ ] At least one new blog post per week, bilingual EN+CN, 3-section format (once template is defined).
 - [ ] Obsidian vault grows by ≥3 reading notes per week with methodology tags.
 - [ ] `/exp-run` can execute a dual-GPU A/B loop to convergence without manual intervention.
