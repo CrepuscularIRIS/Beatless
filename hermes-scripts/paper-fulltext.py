@@ -1,4 +1,17 @@
-"""Paper Full-Text — download PDFs + extract Markdown body for the KB.
+"""DEFERRED 2026-04-26 — full-PDF ingestion path turned out to be marginal.
+
+User decision: stick with the lightweight Zotero-stub + Obsidian-feed path. PDFs
+stay in Zotero only; no body-text extraction in the standard pipeline. MinerU
+proved heavy + average quality vs the cost (multi-GB models, modelscope SSL
+flakiness, 200-char-per-second throughput).
+
+This script is preserved as an OPTIONAL on-demand tool. Run manually with --citekey
+when you want one specific paper's body text in the vault. Not wired into cron.
+The dual-backend (mineru → pypdf fallback) still works; the deferral is about
+NOT using it as the default KB layer, not about dead code.
+
+"""Original v0 docstring follows below.
+
 
 Extends the Zotero→Obsidian pipeline with the missing third stage:
 
