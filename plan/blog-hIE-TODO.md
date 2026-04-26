@@ -153,6 +153,41 @@ Each index page uses the hIE's hero from `_shared/` group shot or a representati
 
 ---
 
+### TODO-9: Local PDF → Markdown pipeline (MinerU)
+
+**Created**: 2026-04-26
+**Goal**: build a local paper-text database to drop token cost on paper-spotlight drafting.
+
+**Current state**: `paper-harvest.py` posts metadata + URL into Zotero; `zotero-to-obsidian.py` mirrors a stub note (`@<citekey>.md`) into `~/obsidian-vault/papers/literature/`. The stub carries the abstract, but `blog-draft.py` has no body text to work with — so when the LLM writes a paper spotlight, it depends on whatever it can re-derive from the abstract + hook.
+
+**Direction**: insert a third stage between Zotero and the blog drafter:
+
+```
+paper-harvest.py        → Zotero (metadata + PDF URL, optionally PDF attachment)
+zotero-to-obsidian.py   → ~/obsidian-vault/papers/literature/@<citekey>.md  (stub)
+NEW: paper-fulltext.py  → MinerU on PDF → ~/obsidian-vault/papers/full-text/<citekey>.md
+                                          (sectioned Markdown, equations preserved)
+blog-draft.py           → reads stub + full-text, drafts spotlight without re-fetching
+```
+
+**Why MinerU**: SciPDF / GROBID / nougat all have PDF-to-Markdown angles, but MinerU is the
+current SOTA for academic-paper structure preservation (figures, equations, tables). It
+runs locally — no per-page LLM cost.
+
+**Open design questions** (revisit when this gets prioritized):
+- Disk footprint: ~9000 papers × ~2-5 MB Markdown each ≈ 20-45 GB
+- PDF storage: Zotero already manages PDFs; do we duplicate locally or stream from Zotero?
+- Trigger model: extract on Zotero-sync (eager) vs on blog-draft demand (lazy)
+- Quality gate: MinerU output has known issues with multi-column rendering — need a
+  validator before the body text is trusted by `blog-draft.py`
+
+**Why deferred**: token cost on the current pipeline is acceptable (the writer model
+is MMX, not Claude). MinerU adds value when the pipeline has to scale to thousands of
+papers and we want spotlight drafts that go beyond what the abstract can reveal.
+Revisit when the paper backlog crosses the threshold where re-fetching is the bottleneck.
+
+---
+
 ## 📋 Status snapshot (auto-updateable)
 
 ```
