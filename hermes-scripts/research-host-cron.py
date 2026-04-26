@@ -86,6 +86,69 @@ def detect_workspace(arg_path: str | None) -> Path | None:
     return candidates[0][1]
 
 
+def gpu_state() -> list[dict]:
+    """Per Regulations.md § 4.2 — pre-launch nvidia-smi check.
+
+    Returns one dict per GPU with usage stats. Cron driver uses this to
+    detect contention and yield to interactive work (Regulations.md § 4.5).
+    """
+    if not shutil.which("nvidia-smi"):
+        return [{"index": -1, "error": "nvidia-smi not found"}]
+    try:
+        r = subprocess.run(
+            ["nvidia-smi",
+             "--query-gpu=index,memory.used,memory.total,utilization.gpu",
+             "--format=csv,noheader,nounits"],
+            capture_output=True, text=True, timeout=15,
+        )
+        if r.returncode != 0:
+            return [{"index": -1, "error": f"nvidia-smi rc={r.returncode}"}]
+    except Exception as e:
+        return [{"index": -1, "error": f"nvidia-smi exception: {str(e)[:100]}"}]
+
+    out = []
+    for line in (r.stdout or "").splitlines():
+        parts = [p.strip() for p in line.split(",")]
+        if len(parts) < 4:
+            continue
+        try:
+            idx = int(parts[0])
+            mem_used = int(parts[1])
+            mem_total = int(parts[2])
+            util = int(parts[3])
+            # Per Regulations.md § 4.2: "busy" if either threshold exceeded
+            busy = mem_used > 5 * 1024 or util > 30
+            out.append({
+                "index": idx,
+                "mem_used_mib": mem_used,
+                "mem_total_mib": mem_total,
+                "util_gpu_pct": util,
+                "busy": busy,
+            })
+        except ValueError:
+            continue
+
+    # Also enumerate process owners so the agent knows whose job is running
+    try:
+        r2 = subprocess.run(
+            ["nvidia-smi", "--query-compute-apps=pid,process_name,used_memory",
+             "--format=csv,noheader,nounits"],
+            capture_output=True, text=True, timeout=15,
+        )
+        procs = []
+        for line in (r2.stdout or "").splitlines():
+            parts = [p.strip() for p in line.split(",")]
+            if len(parts) >= 3:
+                procs.append({"pid": parts[0], "name": parts[1][:60],
+                              "mem_mib": parts[2]})
+        if procs:
+            for g in out:
+                g.setdefault("processes_seen", procs)
+    except Exception:
+        pass
+    return out
+
+
 def plugin_readiness() -> dict:
     """One-shot tool-availability test. Returns {plugin: 'ok'|'fail'|'missing'}."""
     out = {}
@@ -124,12 +187,49 @@ def plugin_readiness() -> dict:
     return out
 
 
+def download_state(workspace: Path) -> dict:
+    """If the workspace has a download orchestrator, peek at its progress
+    so the cron driver knows what models/datasets are still arriving.
+
+    Per user 2026-04-26 directive: research-host should NOT block waiting on
+    downloads, but it MUST know what's not yet available so it doesn't try
+    to launch experiments using missing files.
+    """
+    out: dict = {"orchestrator": None, "summary": ""}
+    for cand in ("download_all.py", "downloads.yaml", "scripts/download_all.py"):
+        p = workspace / cand
+        if p.exists():
+            out["orchestrator"] = str(p)
+            break
+    # Look for a downloads/cache dir + count partials
+    cache_candidates = [
+        workspace / "downloads",
+        Path.home() / ".cache" / "huggingface",
+        Path("/data") / workspace.name,
+    ]
+    parts = []
+    for c in cache_candidates:
+        if not c.exists():
+            continue
+        try:
+            partials = sum(1 for _ in c.rglob("*.incomplete"))
+            tmps = sum(1 for _ in c.rglob("*.tmp"))
+            if partials or tmps:
+                parts.append(f"{c}: {partials} .incomplete, {tmps} .tmp")
+        except (PermissionError, OSError):
+            continue
+    out["summary"] = "; ".join(parts) if parts else "no in-progress downloads detected"
+    return out
+
+
 def gather_state(workspace: Path) -> dict:
     """Phase 1 — collect everything ClaudeCode needs to resume / start."""
     state: dict = {
         "ts": datetime.now(timezone.utc).isoformat(),
         "workspace": str(workspace),
         "plugin_readiness": plugin_readiness(),
+        "gpu_state": gpu_state(),
+        "download_state": download_state(workspace),
     }
 
     # Git state
@@ -196,7 +296,7 @@ def build_prompt(state_file: Path) -> str:
     return (
         f"/research-host {state_file}\n\n"
         f"Operational discipline (these are constitutional anchors — see "
-        f"~/claw/plan/Regulations.md § Three Core Principles):\n"
+        f"~/claw/plan/Regulations.md § Three Core Principles + § 4 GPU Discipline):\n"
         f"  1. Use the `superpowers:dispatching-parallel-agents` skill for niche "
         f"dispatch. Use `superpowers:verification-before-completion` before any "
         f"`keep` claim.\n"
@@ -207,6 +307,13 @@ def build_prompt(state_file: Path) -> str:
         f"correctness review (P2 Pass 1). Always invoke with stdin closed "
         f"(`</dev/null` if shell, or `subagent_type=codex:codex-rescue` from a "
         f"Task call which manages stdin internally).\n"
+        f"  3a. CODEX MULTI-LINE EDIT SAFETY NET: if a code change would be a "
+        f"NEW file or > 80 modified lines (e.g. writing a Qwen-VL adapter from "
+        f"scratch), DO NOT have Codex commit immediately. Instead: ask Codex to "
+        f"output a file-by-file plan first, hand the plan to P2 review (Pass 1 "
+        f"correctness check on the PLAN, not the code), then have Codex apply. "
+        f"For surgical edits (≤ 80 lines, single function), commit-immediately "
+        f"is fine.\n"
         f"  4. Gemini (3.1-pro-preview) handles divergence: literature search, "
         f"assumption-challenge (P2 Pass 2), alternative-root-cause probing.\n"
         f"  5. Sonnet 4.6 in a fresh Task context handles red-team (P2 Pass 3) — "
@@ -217,7 +324,23 @@ def build_prompt(state_file: Path) -> str:
         f"  7. State on disk: every ledger row, decision_trace event, progress "
         f"entry persisted before next phase. Next cron tick must be able to "
         f"resume by reading disk only.\n"
-        f"  8. Final line of your reply must be `=== HOST HALTED: <reason> ===` "
+        f"  8. GPU DISCIPLINE (Regulations.md § 4 — non-negotiable):\n"
+        f"     - The state file you were given includes `gpu_state` with current "
+        f"per-GPU memory + utilization. Read it before any launch.\n"
+        f"     - Any GPU with `busy=true` is OFF-LIMITS for this cycle's experiments. "
+        f"Pick an idle GPU or yield (status=yielded-to-interactive).\n"
+        f"     - Every launch script MUST set `CUDA_VISIBLE_DEVICES=<single-id>` (no "
+        f"comma list, no default). NEVER two experiments on the same GPU.\n"
+        f"     - VRAM ceiling: target ≤ 40 GB, hard ≤ 46 GB. If predicted > 40 GB, "
+        f"shrink batch / precision FIRST, don't gamble.\n"
+        f"     - `nohup ... &` your launches and record PIDs to progress.md so "
+        f"next cron tick can `ps -p <PID>` to verify.\n"
+        f"  9. DOWNLOAD AWARENESS: state file's `download_state` shows whether "
+        f"models/datasets are still arriving. Don't try to launch experiments "
+        f"that need a model whose `.incomplete` file still exists. If a niche "
+        f"depends on a missing model, mark it `pending=download` in "
+        f"decision_trace.jsonl and skip to the next.\n"
+        f"  10. Final line of your reply must be `=== HOST HALTED: <reason> ===` "
         f"so the cron driver can log the halt reason.\n"
     )
 
@@ -296,6 +419,34 @@ def main() -> int:
         print(f"\n  ✗ refusing to fire — codex/gemini not ready (P2 cannot be honored)")
         print(f"  details: {pr}")
         return 2
+
+    # Refuse to fire if both GPUs are busy — Regulations.md § 4.5 fairness rule.
+    # research-host's research cycle MAY want to launch a training run; if neither GPU
+    # is available, the cycle would block on resource contention. Yield instead.
+    gpus = state["gpu_state"]
+    if gpus and not any(g.get("error") for g in gpus):
+        idle = [g for g in gpus if not g.get("busy")]
+        if not idle:
+            owners = []
+            for g in gpus:
+                for p in (g.get("processes_seen") or []):
+                    owners.append(f"GPU{g['index']}={p.get('pid')}({p.get('name')})")
+            record = {
+                "status": "yielded-to-interactive",
+                "gpu_state": gpus,
+                "owners_detected": owners[:10],
+                "workspace": str(workspace),
+                "note": "All GPUs busy — yielding per Regulations.md § 4.5. "
+                        "Will retry next cron tick.",
+            }
+            append_log(record)
+            STATUS_FILE.parent.mkdir(parents=True, exist_ok=True)
+            STATUS_FILE.write_text(json.dumps(record, indent=2))
+            print(f"\n  ⏸  yielding — all GPUs busy (Regulations.md § 4.5)")
+            for g in gpus:
+                print(f"     GPU{g['index']}: {g.get('mem_used_mib','?')} MiB / "
+                      f"{g.get('util_gpu_pct','?')}% util, busy={g.get('busy')}")
+            return 0  # exit 0 so cron doesn't flag this as failure
 
     print(f"\nPhase 2: invoke claude -p /research-host ...", flush=True)
     result = invoke_claude(workspace, state_file, args.dry_run, args.model)

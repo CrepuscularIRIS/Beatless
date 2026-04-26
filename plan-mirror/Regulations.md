@@ -106,6 +106,91 @@ evidence_pointers:
 
 ---
 
+## 原则 4 — GPU Discipline（资源不抢、隔离、可见、可终止）
+
+> **添加于 2026-04-26**（Codex 2-GPU 评估事件后写入）。
+> 任何 cron-driven 或 user-driven 的 GPU 任务都必须遵守。research-host、exp-run、任何
+> 新加的 gpu-job-cron.py 都受此约束。**违反即 BLOCK。**
+
+### 4.1 GPU 隔离（Isolation）
+
+- **每个 GPU 同一时刻最多一个 training/eval process。**
+- 启动脚本 **必须** 设置 `CUDA_VISIBLE_DEVICES=<id>` 指定 _单一_ 索引（NOT 列表，NOT 缺省）。
+  - ✅ `CUDA_VISIBLE_DEVICES=0 python train.py`
+  - ❌ `python train.py`（继承 shell 的所有可见 GPU）
+  - ❌ `CUDA_VISIBLE_DEVICES=0,1 python train.py`（隐式抢两块）
+- A/B 实验（Full Mode）：`exp_A → GPU0 ONLY`，`exp_B → GPU1 ONLY`，**NEVER 两个跑同一块**。
+
+### 4.2 Pre-launch nvidia-smi check（强制）
+
+任何 launch 之前必须：
+
+```bash
+# 1. 查询目标 GPU 当前是否 idle
+nvidia-smi --query-gpu=index,memory.used,utilization.gpu --format=csv,noheader \
+  | awk -F', ' '$1=='"$TARGET_GPU"' {print}'
+
+# 2. 同时查 process owner（避免误杀别人的任务）
+nvidia-smi --query-compute-apps=pid,process_name,gpu_uuid,used_memory --format=csv
+
+# 3. 判定规则（强制 — 任一为真即 BLOCK launch）：
+#    - memory.used > 5 GB on TARGET_GPU → busy, abort
+#    - utilization.gpu > 30% on TARGET_GPU → busy, abort
+#    - 有非自己的 process 占用 TARGET_GPU → busy, abort, log owner PID
+```
+
+研究 cron driver（`research-host-cron.py`、未来的 `gpu-job-cron.py`）**必须** 在 Phase 1
+state-gathering 阶段执行此检查，把结果写入 state file 给 ClaudeCode 看。如果目标 GPU
+busy，driver **必须** 退出 status=`gpu-contention`，**不能** 强行 fire。
+
+### 4.3 VRAM 天花板
+
+| 字段 | 值 | 来源 |
+|---|---|---|
+| 单 GPU 物理上限 | 48 GB | RTX 4090 D 实测 49,140 MiB |
+| 单 run 目标 | ≤ 40 GB | 留 8 GB 安全边际 |
+| 单 run 硬上限 | ≤ 46 GB | 超 → mid-run kill |
+| 跨 GPU 总和（同时运行） | ≤ 80 GB | 不要把两块都顶满 |
+
+如果 `Task.md` / `program.md` 预估 VRAM > 40 GB：**先调小 batch / 精度 / 序列长度**，
+不要"抱试试看"心态。VRAM 估错炸 OOM 是 R7（必须有失败条件）的范畴。
+
+### 4.4 Budget + 硬终止
+
+- 单 run wall-clock budget 来自 `Task.md`，默认 4h。
+- **Hard kill at budget + 1h**：driver 必须 `kill <PID>` 并 `git revert` 未完成的 commit。
+- Mid-run check at 50% budget：parse train log，loss NaN / divergence / OOM → early-kill。
+- Cron-driven launch **必须** 用 `nohup ... &` + 记录 PID 到 `progress.md`，下次 cron tick
+  能 `ps -p <PID>` 验活。
+
+### 4.5 同 host 公平性（多 cron 共存）
+
+当 `research-host-cron.py` + 用户交互式开发 + 其他 GPU 任务同 host 时：
+- **用户交互式优先**：09:00–18:00 本地时段，cron driver 先 `nvidia-smi` 探，busy 就跳过 tick
+  （不抱怨，写 `status=yielded-to-interactive`，下次 tick 再试）
+- 多个 cron driver 之间用 `~/.hermes/shared/.gpu-lock-<id>` 文件做 advisory lock。
+  driver Phase 1 取锁，Phase 6（loop end）释放。锁陈旧 > 6h（process 已死）→ 强制清。
+
+### 4.6 反模式（直接 BLOCK）
+
+- 启动脚本 fork 一个 child training（隐式 2 process / 1 GPU）
+- log/checkpoint 写到对方的目录（GPU 隔离了，磁盘 race condition 仍然害人）
+- `kill -9` 别人的进程来腾 GPU（禁止；只能 yield）
+- 跑 inference 不设 `CUDA_VISIBLE_DEVICES`，"反正只用一块"——不行，未来 race
+- 改 evaluator 来"绕过 OOM"——R4 BLOCK（test signal 不可被训练访问）
+
+### 4.7 现状（2026-04-26 写入时）
+
+```
+GPU 0: 9,513 MiB used (~19% of 49,140) — Codex eval task PID 605460
+GPU 1: 19,687 MiB used (~40%)          — Codex eval task PID 608445
+Both GPUs in active use by user-launched 2-GPU evaluation.
+```
+
+任何 cron tick 在这个状态下应该 `status=gpu-contention` 退出，**不抢**。
+
+---
+
 ## 三原则合规检查表（embed 进每个 research command）
 
 每个 `/research-*` 命令在结束前必须自检：
