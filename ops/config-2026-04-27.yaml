@@ -1,0 +1,66 @@
+model:
+  default: kimi-k2.6
+  provider: kimi-coding
+  reasoning:
+    enabled: true
+providers:
+  step:
+    name: Step 3.5 Flash
+    base_url: https://api.stepfun.com/step_plan/v1
+    key_env: STEPFUN_API_KEY
+    context_length: 128000
+  minimax:
+    name: MiniMax M2.7
+    base_url: https://api.minimaxi.com/v1
+    key_env: MINIMAX_API_KEY
+    context_length: 200000
+delegation:
+  provider: step
+  model: step-3.5-flash
+  max_concurrent_children: 5
+  max_spawn_depth: 2
+  orchestrator_enabled: true
+  max_iterations: 50
+terminal:
+  backend: local
+  cwd: .
+  timeout: 7200
+  lifetime_seconds: 7200
+cron:
+  script_timeout_seconds: 7200
+agent:
+  max_turns: 90
+  reasoning_effort: none
+skills:
+  disabled:
+  - codex
+  - opencode
+memory:
+  memory_enabled: true
+  user_profile_enabled: true
+model_aliases:
+  step:
+    model: step-3.5-flash
+    provider: step
+    base_url: https://api.stepfun.com/step_plan/v1
+  minimax:
+    model: MiniMax-M2.7
+    provider: minimax
+    base_url: https://api.minimaxi.com/v1
+  kimi:
+    model: kimi-k2.6
+    provider: kimi-coding
+display:
+  skin: default
+  tool_progress: all
+auxiliary:
+  web_extract:
+    provider: step
+    model: step-3.5-flash
+    base_url: https://api.stepfun.com/step_plan/v1
+    api_key: ''
+  session_search:
+    provider: step
+    model: step-3.5-flash
+    base_url: https://api.stepfun.com/step_plan/v1
+    api_key: ''
