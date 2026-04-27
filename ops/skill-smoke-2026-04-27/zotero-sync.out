@@ -1,0 +1,5 @@
+
+session_id: 20260427_021751_554eb8
+- **Trigger**: Hermes-native cron job (invoked via `hermes chat -Q -s zotero-sync -q "<prompt>"` from a thin cron shim); replaces `~/.hermes/scripts/zotero-to-obsidian.py`
+- **Canonical path**: Writes to `~/obsidian-vault/papers/literature/@<citekey>.md` (one per Zotero item); reads from Zotero API (`/users/{user}/items?limit=100&start=N`)
+- **Heterogeneous review steps**: None — this skill is deliberately pure ETL (no LLM calls, no routing to claude-code-router / codex-router / gemini-router)

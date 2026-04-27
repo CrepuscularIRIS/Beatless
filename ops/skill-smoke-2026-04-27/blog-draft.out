@@ -1,0 +1,5 @@
+
+session_id: 20260427_021734_1e523e
+- **Trigger:** Drafts new bilingual (en + zh) blog posts from curated Obsidian vault sources — either recent feed snapshots for Signal Posts, Zotero-synced paper notes for Paper Spotlights, or audit-flagged stale posts for Milestone Posts.
+- **Canonical path:** Writes to `~/claw/blog/src/content/blogs/<slug>/index.mdx` (English) and `~/claw/blog/src/content/blogs/<slug>-zh/index.mdx` (Chinese), both with `draft: true` frontmatter.
+- **Heterogeneous review:** Before final write, invoke at least one external pass via `codex-router` or `gemini-router` — Paper Spotlight → `codex-router` checks correctness vs paper PDF; Signal Post → `gemini-router` checks tone + factual claims vs sources; Milestone Post → both.

@@ -1,0 +1,5 @@
+
+session_id: 20260427_021734_792fd9
+- Trigger: Runs every 12 hours as a Hermes-native cron job (replaces the legacy `~/.hermes/scripts/blog-maintenance.py` driver).
+- Canonical path: Reads from `~/claw/blog/src/content/blogs/` for post discovery and writes the audit receipt to `~/.hermes/shared/.blog-audit.md`.
+- Heterogeneous review: None — this skill does not invoke any routing skills (e.g., `claude-code-router`, `codex-router`, `gemini-router`); it is a pure shell audit with no delegation to external coding engines.

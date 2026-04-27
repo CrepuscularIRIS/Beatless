@@ -1,0 +1,7 @@
+
+session_id: 20260427_021751_d9cd84
+Based on the `daily-evolution` skill loaded in this session:
+
+- **Trigger:** Runs daily via Hermes Cron (thin shim at `~/.hermes/scripts/` invokes `hermes chat -Q -s daily-evolution`)
+- **Canonical path:** Reads `~/claw/Beatless/standards/Regulations.md` for audit rules; writes synthesis to `~/claw/blog/src/content/blogs/daily-evolution-YYYY-MM-DD/index.mdx`
+- **Heterogeneous review:** Three-model parallel audit — Opus 4.7 (this Hermes session) + Codex gpt-5.3-codex (via `codex-router` skill) + Gemini 3.1-pro (via `gemini-router` skill) — all run the same audit task independently, then Opus synthesizes the three reports into one expert report

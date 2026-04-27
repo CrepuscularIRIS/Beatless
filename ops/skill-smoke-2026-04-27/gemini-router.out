@@ -1,0 +1,3 @@
+
+session_id: 20260427_021643_c65b3a
+I am the **gemini-router** skill. I wrap the **Gemini CLI** (`gemini -p`). Input contract: `task` (required), `model` (default `gemini-3.1-pro`), `working_dir`, `effort`, `timeout_seconds`. One-line invocation: `timeout 1500 gemini -p "$TASK" --model gemini-3.1-pro --effort medium </dev/null`.

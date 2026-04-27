@@ -1,0 +1,7 @@
+
+session_id: 20260427_021751_58c5ed
+(1) Trigger: Cron-driven — invoked via `hermes chat -Q -s paper-harvest -q "<prompt>"` from a thin cron shim (replaces the legacy `~/.hermes/scripts/paper-harvest.py`).
+
+(2) Canonical path: `~/.hermes/shared/.last-paper-harvest-status` (JSON status receipt written after each run).
+
+(3) Heterogeneous review: None — this skill is pure ingestion (fetch → dedup → push to Zotero). No routing to claude-code-router, codex-router, or gemini-router is mentioned in the skill body.

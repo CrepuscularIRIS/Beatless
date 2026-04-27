@@ -1,0 +1,10 @@
+
+session_id: 20260427_021643_ccf9b9
+I wrap **OpenAI Codex CLI** (`codex exec`).
+
+**Input contract**: `task` (required), `working_dir` (required), optional `model`, `effort`, `timeout_seconds`. Codex runs shell commands iteratively and returns `RESULT: ok | fail | needs-human`.
+
+**One-liner**:
+```bash
+cd "$WORKING_DIR" && timeout "$TIMEOUT" codex exec --model "$MODEL" --effort "$EFFORT" "$TASK" </dev/null
+```

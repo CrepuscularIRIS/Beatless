@@ -1,0 +1,5 @@
+
+session_id: 20260427_021816_d9abc9
+- **Trigger:** Runs as a Hermes-native cron job (`hermes chat -Q -s feed-crawl -q "<prompt>"`) replacing the legacy `~/.hermes/scripts/feed-crawl.py` shim.
+- **Canonical path:** Writes feed entries to `~/obsidian-vault/feeds/<YYYY-MM-DD>/<lab>-<slug>.md` (idempotent — skips if file already exists).
+- **Heterogeneous review:** None — this is a pure ETL pipeline with no LLM calls and no routing to external review engines (claude-code / codex / gemini).

@@ -1,0 +1,10 @@
+
+session_id: 20260427_021643_ddf019
+I am the **claude-code-router** skill. I wrap the **Claude Code CLI** (`claude -p`).
+
+**Input contract**: `task` (required prompt), `working_dir` (required absolute path), optional `model` (default opus), `permission_mode` (default bypassPermissions), `timeout_seconds` (default 1800), `extra_args`.
+
+**One-line invocation recipe**:
+```bash
+timeout 1800 claude -p --model opus --permission-mode bypassPermissions "$TASK" </dev/null
+```

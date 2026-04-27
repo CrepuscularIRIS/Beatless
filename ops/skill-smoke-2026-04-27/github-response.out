@@ -1,0 +1,5 @@
+
+session_id: 20260427_021816_43b757
+(1) Trigger: Runs every 60 minutes as a Hermes-native cron job to triage open PRs we own and claimed issues.
+(2) Canonical path: Reads/writes status to `~/.hermes/shared/.last-github-response-status`
+(3) Heterogeneous review: Delegates heavy lifting (CI fixes, addressing reviewer comments) to `claude-code-router` with a tightly-scoped permission boundary (bypassPermissions mode, fork-only push, never close PRs, never claim new issues).

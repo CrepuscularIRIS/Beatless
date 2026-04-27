@@ -1,0 +1,320 @@
+{
+  "jobs": [
+    {
+      "id": "c441224738df",
+      "name": "GitHub Response",
+      "prompt": "The script already executed ClaudeCode to handle PR responses. The output above is the result. Summarize what was done in 2-3 sentences. Save any important outcomes to memory.",
+      "skills": [
+        "github-response"
+      ],
+      "skill": "github-response",
+      "model": null,
+      "provider": null,
+      "base_url": null,
+      "script": "github-response.py",
+      "schedule": {
+        "kind": "interval",
+        "minutes": 60,
+        "display": "every 60m"
+      },
+      "schedule_display": "every 60m",
+      "repeat": {
+        "times": null,
+        "completed": 78
+      },
+      "enabled": true,
+      "state": "scheduled",
+      "paused_at": null,
+      "paused_reason": null,
+      "created_at": "2026-04-22T04:41:22.240751-04:00",
+      "next_run_at": "2026-04-27T02:46:08.448755-04:00",
+      "last_run_at": "2026-04-27T01:46:08.448755-04:00",
+      "last_status": "ok",
+      "last_error": null,
+      "last_delivery_error": null,
+      "deliver": "local",
+      "origin": null
+    },
+    {
+      "id": "35bf34b5ce93",
+      "name": "GitHub PR Pipeline",
+      "prompt": "The script already executed ClaudeCode to run the full PR pipeline. The output above is the result. Summarize what was done in 2-3 sentences. Save the PR URL and outcome to memory.",
+      "skills": [
+        "github-pr"
+      ],
+      "skill": "github-pr",
+      "model": null,
+      "provider": null,
+      "base_url": null,
+      "script": "github-pr.py",
+      "schedule": {
+        "kind": "interval",
+        "minutes": 150,
+        "display": "every 150m"
+      },
+      "schedule_display": "every 150m",
+      "repeat": {
+        "times": null,
+        "completed": 40
+      },
+      "enabled": true,
+      "state": "scheduled",
+      "paused_at": null,
+      "paused_reason": null,
+      "created_at": "2026-04-22T04:41:31.153282-04:00",
+      "next_run_at": "2026-04-27T03:09:05.611727-04:00",
+      "last_run_at": "2026-04-26T15:08:29.690906-04:00",
+      "last_status": "ok",
+      "last_error": null,
+      "last_delivery_error": null,
+      "deliver": "local",
+      "origin": null
+    },
+    {
+      "id": "1bd2e326faff",
+      "name": "Blog Maintenance",
+      "prompt": "Blog maintenance cycle. Audit all posts for broken links and outdated content. Research trending AI/ML/BCI topics. Write or rewrite posts with MiniMax M2.7 quality writing. Generate images with MiniMax image model. Verify build passes with pnpm build. Commit only verified content.",
+      "skills": [
+        "blog-maintenance"
+      ],
+      "skill": "blog-maintenance",
+      "model": "MiniMax-M2.7",
+      "provider": "minimax",
+      "base_url": "https://api.minimaxi.com/v1",
+      "script": "blog-maintenance.py",
+      "schedule": {
+        "kind": "interval",
+        "minutes": 720,
+        "display": "every 720m"
+      },
+      "schedule_display": "every 720m",
+      "repeat": {
+        "times": null,
+        "completed": 9
+      },
+      "enabled": true,
+      "state": "scheduled",
+      "paused_at": null,
+      "paused_reason": null,
+      "created_at": "2026-04-22T04:41:38.684659-04:00",
+      "next_run_at": "2026-04-27T12:47:03.222782-04:00",
+      "last_run_at": "2026-04-27T00:47:03.222782-04:00",
+      "last_status": "ok",
+      "last_error": null,
+      "last_delivery_error": null,
+      "deliver": "local",
+      "origin": null
+    },
+    {
+      "id": "0bef9fb8e1e5",
+      "name": "Paper Harvest",
+      "prompt": "The paper-harvest script pushed new papers into Zotero. Check ~/.hermes/shared/.last-paper-harvest-status for the summary JSON \u2014 report new-items-posted, skipped-duplicates, any errors. Save the run summary to memory.",
+      "skills": [
+        "paper-harvest"
+      ],
+      "skill": "paper-harvest",
+      "model": null,
+      "provider": null,
+      "base_url": null,
+      "script": "paper-harvest.py",
+      "schedule": {
+        "kind": "interval",
+        "minutes": 240,
+        "display": "every 240m"
+      },
+      "schedule_display": "every 240m",
+      "repeat": {
+        "times": null,
+        "completed": 10
+      },
+      "enabled": true,
+      "state": "scheduled",
+      "paused_at": null,
+      "paused_reason": null,
+      "created_at": "2026-04-23T08:07:52.455337-04:00",
+      "next_run_at": "2026-04-27T04:50:33.176517-04:00",
+      "last_run_at": "2026-04-26T12:26:12.417649-04:00",
+      "last_status": "ok",
+      "last_error": null,
+      "last_delivery_error": null,
+      "deliver": "local",
+      "origin": null
+    },
+    {
+      "id": "3122f8512b60",
+      "name": "Zotero Sync",
+      "prompt": "The zotero-to-obsidian script re-synced Zotero \u2192 Obsidian vault. Report delta (new notes written, errors) from ~/.hermes/shared/.last-zotero-obsidian-sync. Save to memory if notes were added.",
+      "skills": [
+        "zotero-sync"
+      ],
+      "skill": "zotero-sync",
+      "model": null,
+      "provider": null,
+      "base_url": null,
+      "script": "zotero-to-obsidian.py",
+      "schedule": {
+        "kind": "interval",
+        "minutes": 360,
+        "display": "every 360m"
+      },
+      "schedule_display": "every 360m",
+      "repeat": {
+        "times": null,
+        "completed": 10
+      },
+      "enabled": true,
+      "state": "scheduled",
+      "paused_at": null,
+      "paused_reason": null,
+      "created_at": "2026-04-23T09:33:25.589488-04:00",
+      "next_run_at": "2026-04-27T06:39:05.611727-04:00",
+      "last_run_at": "2026-04-26T12:25:27.012529-04:00",
+      "last_status": "ok",
+      "last_error": null,
+      "last_delivery_error": null,
+      "deliver": "local",
+      "origin": null
+    },
+    {
+      "id": "bf68952eb6bc",
+      "name": "Feed Crawl",
+      "prompt": "Summarize the feed-crawl output above in one sentence.",
+      "skills": [
+        "feed-crawl"
+      ],
+      "skill": "feed-crawl",
+      "model": null,
+      "provider": null,
+      "base_url": null,
+      "script": "feed-crawl.py",
+      "schedule": {
+        "kind": "interval",
+        "minutes": 720,
+        "display": "every 720m"
+      },
+      "schedule_display": "every 720m",
+      "repeat": {
+        "times": null,
+        "completed": 6
+      },
+      "enabled": true,
+      "state": "scheduled",
+      "paused_at": null,
+      "paused_reason": null,
+      "created_at": "2026-04-24T03:18:53.478356-04:00",
+      "next_run_at": "2026-04-27T12:50:02.131386-04:00",
+      "last_run_at": "2026-04-27T00:50:02.131386-04:00",
+      "last_status": "ok",
+      "last_error": null,
+      "last_delivery_error": null,
+      "deliver": "local",
+      "origin": null
+    },
+    {
+      "id": "146f3b29a645",
+      "name": "Blog Translate",
+      "prompt": "Blog translation script just ran. Summarize in 1 sentence what was translated.",
+      "skills": [
+        "blog-translate"
+      ],
+      "skill": "blog-translate",
+      "model": null,
+      "provider": null,
+      "base_url": null,
+      "script": "blog-translate.py",
+      "schedule": {
+        "kind": "interval",
+        "minutes": 10,
+        "display": "every 10m"
+      },
+      "schedule_display": "every 10m",
+      "repeat": {
+        "times": null,
+        "completed": 108
+      },
+      "enabled": true,
+      "state": "scheduled",
+      "paused_at": null,
+      "paused_reason": null,
+      "created_at": "2026-04-25T04:09:39.786884-04:00",
+      "next_run_at": "2026-04-27T02:29:13.268322-04:00",
+      "last_run_at": "2026-04-27T02:19:13.268322-04:00",
+      "last_status": "ok",
+      "last_error": null,
+      "last_delivery_error": null,
+      "deliver": "local",
+      "origin": null
+    },
+    {
+      "id": "2ed9a07d71ff",
+      "name": "Blog Draft",
+      "prompt": "Blog draft script just ran. Summarize what was drafted in 1 sentence.",
+      "skills": [
+        "blog-draft"
+      ],
+      "skill": "blog-draft",
+      "model": null,
+      "provider": null,
+      "base_url": null,
+      "script": "blog-draft.py",
+      "schedule": {
+        "kind": "interval",
+        "minutes": 30,
+        "display": "every 30m"
+      },
+      "schedule_display": "every 30m",
+      "repeat": {
+        "times": null,
+        "completed": 56
+      },
+      "enabled": true,
+      "state": "scheduled",
+      "paused_at": null,
+      "paused_reason": null,
+      "created_at": "2026-04-25T04:09:39.896719-04:00",
+      "next_run_at": "2026-04-27T02:20:52.058207-04:00",
+      "last_run_at": "2026-04-27T01:50:52.058207-04:00",
+      "last_status": "ok",
+      "last_error": null,
+      "last_delivery_error": null,
+      "deliver": "local",
+      "origin": null
+    },
+    {
+      "id": "de4594338660",
+      "name": "Daily Evolution",
+      "prompt": "Daily Evolution Loop just ran. Summarize in 1 sentence: did the audit complete, where is the report, was it committed?",
+      "skills": [
+        "daily-evolution"
+      ],
+      "skill": "daily-evolution",
+      "model": null,
+      "provider": null,
+      "base_url": null,
+      "script": "daily-evolution.py",
+      "schedule": {
+        "kind": "interval",
+        "minutes": 1440,
+        "display": "every 1440m"
+      },
+      "schedule_display": "every 1440m",
+      "repeat": {
+        "times": null,
+        "completed": 1
+      },
+      "enabled": true,
+      "state": "scheduled",
+      "paused_at": null,
+      "paused_reason": null,
+      "created_at": "2026-04-25T08:12:36.766298-04:00",
+      "next_run_at": "2026-04-27T08:27:46.347023-04:00",
+      "last_run_at": "2026-04-26T08:27:46.347023-04:00",
+      "last_status": "ok",
+      "last_error": null,
+      "last_delivery_error": null,
+      "deliver": "local",
+      "origin": null
+    }
+  ],
+  "updated_at": "2026-04-27T02:19:13.268435-04:00"
+}

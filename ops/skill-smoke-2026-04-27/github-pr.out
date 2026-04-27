@@ -1,0 +1,5 @@
+
+session_id: 20260427_021816_40911a
+- **Trigger:** cron tick — runs as a Hermes-native cron job (thin shim calls `hermes chat -Q -s github-pr -q "<prompt>"`)
+- **Canonical path:** reads `~/claw/Beatless/standards/repos.tier0.yaml` for Tier 0 curated repos
+- **Heterogeneous review:** triple-pass — codex-router (correctness), gemini-router (architecture), sonnet adversarial red-team; mean score threshold 6.0

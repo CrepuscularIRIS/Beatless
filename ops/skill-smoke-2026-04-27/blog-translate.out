@@ -1,0 +1,5 @@
+
+session_id: 20260427_021734_dbeb34
+- Trigger: Translate any untranslated English blog posts, either from a cron prompt, an audit listing missing Chinese pairs, or a direct user request like "translate the latest post".
+- Canonical path: Reads from `~/claw/blog/src/content/blogs/<slug>/index.mdx` and writes the Chinese translation to `~/claw/blog/src/content/blogs/<slug>-zh/index.mdx` with `draft: true`.
+- Heterogeneous review: After drafting, it runs a codex-router faithfulness review (checking claims, numbers, code blocks, URLs) and a gemini-router fluency review (checking banned phrases, paragraph length, natural Chinese readability); both must score ≥ 7.0 to pass.
