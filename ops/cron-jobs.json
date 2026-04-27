@@ -20,17 +20,17 @@
       "schedule_display": "every 60m",
       "repeat": {
         "times": null,
-        "completed": 78
+        "completed": 83
       },
       "enabled": true,
       "state": "scheduled",
       "paused_at": null,
       "paused_reason": null,
       "created_at": "2026-04-22T04:41:22.240751-04:00",
-      "next_run_at": "2026-04-27T02:46:08.448755-04:00",
-      "last_run_at": "2026-04-27T01:46:08.448755-04:00",
-      "last_status": "ok",
-      "last_error": null,
+      "next_run_at": "2026-04-27T08:18:04.487558-04:00",
+      "last_run_at": "2026-04-27T07:18:04.487558-04:00",
+      "last_status": "error",
+      "last_error": "FileNotFoundError: [Errno 2] No such file or directory",
       "last_delivery_error": null,
       "deliver": "local",
       "origin": null
@@ -55,15 +55,15 @@
       "schedule_display": "every 150m",
       "repeat": {
         "times": null,
-        "completed": 40
+        "completed": 42
       },
       "enabled": true,
       "state": "scheduled",
       "paused_at": null,
       "paused_reason": null,
       "created_at": "2026-04-22T04:41:31.153282-04:00",
-      "next_run_at": "2026-04-27T03:09:05.611727-04:00",
-      "last_run_at": "2026-04-26T15:08:29.690906-04:00",
+      "next_run_at": "2026-04-27T08:15:06.737380-04:00",
+      "last_run_at": "2026-04-27T05:45:06.737380-04:00",
       "last_status": "ok",
       "last_error": null,
       "last_delivery_error": null,
@@ -125,15 +125,15 @@
       "schedule_display": "every 240m",
       "repeat": {
         "times": null,
-        "completed": 10
+        "completed": 11
       },
       "enabled": true,
       "state": "scheduled",
       "paused_at": null,
       "paused_reason": null,
       "created_at": "2026-04-23T08:07:52.455337-04:00",
-      "next_run_at": "2026-04-27T04:50:33.176517-04:00",
-      "last_run_at": "2026-04-26T12:26:12.417649-04:00",
+      "next_run_at": "2026-04-27T08:52:00.493554-04:00",
+      "last_run_at": "2026-04-27T04:52:00.493554-04:00",
       "last_status": "ok",
       "last_error": null,
       "last_delivery_error": null,
@@ -160,15 +160,15 @@
       "schedule_display": "every 360m",
       "repeat": {
         "times": null,
-        "completed": 10
+        "completed": 11
       },
       "enabled": true,
       "state": "scheduled",
       "paused_at": null,
       "paused_reason": null,
       "created_at": "2026-04-23T09:33:25.589488-04:00",
-      "next_run_at": "2026-04-27T06:39:05.611727-04:00",
-      "last_run_at": "2026-04-26T12:25:27.012529-04:00",
+      "next_run_at": "2026-04-27T12:57:04.460993-04:00",
+      "last_run_at": "2026-04-27T06:57:04.460993-04:00",
       "last_status": "ok",
       "last_error": null,
       "last_delivery_error": null,
@@ -230,17 +230,17 @@
       "schedule_display": "every 10m",
       "repeat": {
         "times": null,
-        "completed": 108
+        "completed": 126
       },
       "enabled": true,
       "state": "scheduled",
       "paused_at": null,
       "paused_reason": null,
       "created_at": "2026-04-25T04:09:39.786884-04:00",
-      "next_run_at": "2026-04-27T02:29:13.268322-04:00",
-      "last_run_at": "2026-04-27T02:19:13.268322-04:00",
-      "last_status": "ok",
-      "last_error": null,
+      "next_run_at": "2026-04-27T07:49:04.839017-04:00",
+      "last_run_at": "2026-04-27T07:39:04.839017-04:00",
+      "last_status": "error",
+      "last_error": "FileNotFoundError: [Errno 2] No such file or directory",
       "last_delivery_error": null,
       "deliver": "local",
       "origin": null
@@ -265,17 +265,17 @@
       "schedule_display": "every 30m",
       "repeat": {
         "times": null,
-        "completed": 56
+        "completed": 66
       },
       "enabled": true,
       "state": "scheduled",
       "paused_at": null,
       "paused_reason": null,
       "created_at": "2026-04-25T04:09:39.896719-04:00",
-      "next_run_at": "2026-04-27T02:20:52.058207-04:00",
-      "last_run_at": "2026-04-27T01:50:52.058207-04:00",
-      "last_status": "ok",
-      "last_error": null,
+      "next_run_at": "2026-04-27T08:09:05.851196-04:00",
+      "last_run_at": "2026-04-27T07:39:05.851196-04:00",
+      "last_status": "error",
+      "last_error": "FileNotFoundError: [Errno 2] No such file or directory",
       "last_delivery_error": null,
       "deliver": "local",
       "origin": null
@@ -314,7 +314,40 @@
       "last_delivery_error": null,
       "deliver": "local",
       "origin": null
+    },
+    {
+      "id": "05121f4e64ce",
+      "name": "Refresh Tier 1",
+      "prompt": "Tier 1 refresh just ran. Summarize the new repos.tier1.json contents in 2 sentences (count + top 3 repos).",
+      "skills": [],
+      "skill": null,
+      "model": null,
+      "provider": null,
+      "base_url": null,
+      "script": "refresh-tier1.py",
+      "schedule": {
+        "kind": "interval",
+        "minutes": 1440,
+        "display": "every 1440m"
+      },
+      "schedule_display": "every 1440m",
+      "repeat": {
+        "times": null,
+        "completed": 0
+      },
+      "enabled": true,
+      "state": "scheduled",
+      "paused_at": null,
+      "paused_reason": null,
+      "created_at": "2026-04-27T07:42:25.654405-04:00",
+      "next_run_at": "2026-04-28T07:42:25.654430-04:00",
+      "last_run_at": null,
+      "last_status": null,
+      "last_error": null,
+      "last_delivery_error": null,
+      "deliver": "local",
+      "origin": null
     }
   ],
-  "updated_at": "2026-04-27T02:19:13.268435-04:00"
+  "updated_at": "2026-04-27T07:42:25.654725-04:00"
 }
