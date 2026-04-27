@@ -1,5 +1,5 @@
 ---
-description: Stage 1 of 6 — Obsidian target-domain SOTA mining + Gemini Flash cross-domain breakthrough sourcing + Codex GPT-5.4 novelty pre-screen. Three-engine heterogeneous chain. Outputs literature.md + cross-domain.md.
+description: "Literature survey + cross-domain mining — use when user says 'do a literature survey', 'find papers on X', 'check what's been done in field Y', 'mine cross-domain breakthroughs', 'search Obsidian for related work', '调研', '查文献', '看一下这个领域'. Stage 1 of 6: Obsidian SOTA mining + Gemini Flash cross-domain breakthrough sourcing + Codex novelty pre-screen. Outputs literature.md + cross-domain.md."
 argument-hint: "[<topic-override>]"
 allowed-tools: Bash, Read, Write, Edit, Grep, Glob, Agent
 ---

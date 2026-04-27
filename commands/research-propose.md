@@ -1,5 +1,5 @@
 ---
-description: Stage 3 of 6 — Cross-product reframing (Opus 4.7) × Codex GPT-5.4 academic novelty audit × Gemini 3.1 Pro challenger feasibility audit × citation-verify (Codex on Gemini's IDs) × Opus 4.7 convergence to top-3 with 3-step MVE. Heterogeneous chain enforced; no GPT reviews GPT, no Gemini reviews Gemini.
+description: "Research proposal generation + heterogeneous audit — use when user says 'generate research proposal', 'reframe the problem', 'check novelty', 'verify if this is published', 'feasibility audit', 'design 3-step MVE', '出研究方案', '查novelty', '查重'. Stage 3 of 6: Opus reframes (axiom × lesson cross-product), Codex novelty audit, Gemini challenger feasibility, citation verify, Opus convergence to top-3 with 3-step MVE."
 argument-hint: "[--top-k 3]"
 allowed-tools: Bash, Read, Write, Edit, Agent
 ---

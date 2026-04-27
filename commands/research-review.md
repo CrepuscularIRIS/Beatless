@@ -1,5 +1,5 @@
 ---
-description: Stage 6 of 6 — Heterogeneous triple review. Pass 1 = Codex GPT-5.4 academic correctness (claim vs code vs numbers). Pass 2 = Gemini 3.1 Pro challenger probe (R5/R9/R10) + Codex citation-verify. Pass 3 = Sonnet 4.6 red-team peer-branch (FRESH context). Verdict per constitution verdict_policy.
+description: "Triple-heterogeneous review — use when user says 'audit this experiment', 'review the kept result', 'red-team this finding', 'check for shortcut/leakage', 'triple review', '审一下', '让Codex+Gemini+Sonnet联审'. Stage 6 of 6: Pass 1 Codex correctness (claim vs code vs numbers), Pass 2 Gemini challenger (R5/R9/R10) + citation-verify, Pass 3 Sonnet red-team peer-branch (FRESH context). Verdict per constitution verdict_policy."
 argument-hint: "[--cycle <n>]"
 allowed-tools: Bash, Read, Write, Edit, Agent
 ---

@@ -1,5 +1,5 @@
 ---
-description: Stage 4 of 6 — Pick top reframe from proposals.md, dispatch parallel niche subagents (peer Sonnet 4.6, single-message, no nesting), collect ranked proposals filtered for implicit-block presence. Replaces /research-parallel.
+description: "Parallel niche dispatch — use when user says 'dispatch parallel experiments', 'spawn 9 niche branches', 'dispatch subagents to explore proposal', 'parallel orthogonal niches', '并行分发', '让多个子agent去试'. Stage 4 of 6: pick top reframe from proposals.md, dispatch parallel peer Sonnet 4.6 niche subagents (single-message, no nesting), collect ranked proposals filtered for implicit-block presence. Replaces /research-parallel."
 argument-hint: "[--reframe rank-N] [--niches paper-filter,prior-elicitor,...]"
 allowed-tools: Bash, Read, Write, Edit, Agent
 ---

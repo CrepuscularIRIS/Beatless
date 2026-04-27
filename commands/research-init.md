@@ -1,5 +1,5 @@
 ---
-description: Stage 0 of 6 — Initialize a research sprint. Validates tag, creates branch + ledger files + TODO chain + sprint.yaml. Replaces /research-bootstrap. Engine = Sonnet 4.6 mainhand.
+description: "Initialize a research sprint — use when user says 'start a research sprint', 'begin new research project', 'create research workspace', 'init sprint', '开始research', '建立研究项目', or names a research topic without a sprint existing. Stage 0 of 6: validates tag, creates branch + ledger + TODO chain + sprint.yaml. Replaces /research-bootstrap. Engine = Sonnet 4.6."
 argument-hint: "<sprint-tag>"
 allowed-tools: Bash, Read, Write, Edit
 ---

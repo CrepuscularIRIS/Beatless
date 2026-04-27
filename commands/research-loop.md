@@ -1,5 +1,5 @@
 ---
-description: Stage 5 of 6 — One autoresearch experiment cycle. Edit → commit → run → grep metric → keep/reset → R3 seed check → R7 failure condition → R2 ablation gate → mandatory surface_implicit. NEVER STOP discipline. Anti-gaming + externalization hardened.
+description: "Autoresearch experiment cycle — use when user says 'run an experiment', 'try this idea', 'iterate train.py', 'autoresearch loop', '跑一个实验', '试一下这个想法', or has a concrete experimental change ready. Stage 5 of 6: edit → commit → run → grep metric → keep/reset → R3 seed → R7 failure → R2 ablation → mandatory surface_implicit. GPU precondition gate; NEVER STOP."
 argument-hint: "<idea-description>"
 allowed-tools: Bash, Read, Write, Edit, Grep, Glob
 ---

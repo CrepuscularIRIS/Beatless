@@ -1,5 +1,5 @@
 ---
-description: Stage 2 of 6 — Opus 4.7 distills cross-domain lessons one level up + enumerates target-domain hidden axioms. Outputs lessons.md + axioms.md with load-bearing flags. Engine choice = Opus per low-hallucination + meta-cognition.
+description: "First-principles + hidden axiom enumeration — use when user says 'apply first principles', 'find hidden assumptions', 'what does this field take for granted', 'axiom enumeration', 'distill the philosophical move from these papers', '第一性原理', '挖隐藏假设'. Stage 2 of 6: Opus 4.7 distills cross-domain lessons one level up + enumerates target-domain hidden axioms with load-bearing flags."
 argument-hint: "[--focus <subset>]"
 allowed-tools: Bash, Read, Write, Edit, Agent
 ---

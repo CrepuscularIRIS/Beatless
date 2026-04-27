@@ -20,8 +20,22 @@ PR_STAGE_ROOT = os.path.join(WORKSPACE, "pr-stage")
 STATUS_FILE = os.path.expanduser("~/.hermes/shared/.last-github-pr")
 POLICY_CACHE = os.path.expanduser("~/.hermes/shared/policy-cache.json")
 
+# Repos.md convergence standard sources.
+TIER0_YAML = os.path.expanduser("~/claw/Beatless/standards/repos.tier0.yaml")
+TIER1_STATE = os.path.expanduser("~/.hermes/state/repos.tier1.json")
+
 LANGUAGES = ["python", "rust", "go", "javascript", "typescript"]
 AUTHOR = "CrepuscularIRIS"
+
+# BIG_ORGS — Tier 2 exclusion. Per Repos.md §Tier 2: skip these in Tier 1
+# auto-derivation; allow only in Tier 0 with explicit rationale.
+BIG_ORGS = {
+    "anthropics", "anthropic-ai",
+    "google", "google-deepmind", "google-gemini", "googleapis", "googlecloudplatform",
+    "openai", "microsoft", "meta", "facebookresearch",
+    "nvidia", "huggingface", "tensorflow", "pytorch",
+    "minimax-ai", "alibaba-nlp", "deepseek-ai",
+}
 
 # 2026-04-26 lessons learned (StatPan/lawpy PR #5 retrospective):
 #   1. We opened a PR on a 0-star personal repo that's unlikely to ever merge.
@@ -74,27 +88,130 @@ CLA_MARKERS = [
 ]
 
 
+def _load_tier0() -> list[dict]:
+    """Return list of dicts {repo, rationale, languages, contact_pattern, ai_policy}.
+    Fails open (returns []) if YAML missing or empty — per Repos.md the pipeline
+    must continue with Tier 1 alone if Tier 0 hasn't been seeded yet.
+    Capped at 10 per Repos.md §Tier 0 ("Cap: 10 repos at any time").
+    """
+    try:
+        import yaml
+    except ImportError:
+        return []
+    try:
+        with open(TIER0_YAML) as f:
+            data = yaml.safe_load(f) or {}
+    except (OSError, yaml.YAMLError):
+        return []
+    active = [r for r in (data.get("active") or []) if isinstance(r, dict) and r.get("repo")]
+    return active[:10]   # Repos.md §Tier 0 hard cap
+
+
+def _load_tier1() -> list[dict]:
+    """Tier 1 state is regenerated nightly by refresh-tier1.py. Each entry is
+    {repo, score, source} ranked by signal strength."""
+    try:
+        with open(TIER1_STATE) as f:
+            data = json.load(f) or {}
+    except (OSError, json.JSONDecodeError):
+        return []
+    return [r for r in (data.get("repos") or []) if isinstance(r, dict) and r.get("repo")]
+
+
+def _converged_target_repos() -> tuple[list[str], dict[str, int], dict[str, int]]:
+    """Tier 0 + Tier 1, deduped, BIG_ORGS-filtered (Tier 1 only). Returns
+    (ordered_repo_list, tier_map, tier1_rank_map) where:
+      - tier_map[repo] is 0 or 1
+      - tier1_rank_map[repo] is the 1-indexed rank from refresh-tier1.py's
+        sorted state file (used by tier_score's 'Tier 1 rank ≤ 3' weight per
+        Repos.md §Discovery flow).
+    """
+    tier0 = _load_tier0()
+    tier1 = _load_tier1()
+    repos: list[str] = []
+    tier: dict[str, int] = {}
+    tier1_rank: dict[str, int] = {}
+    for r in tier0:
+        slug = r["repo"].strip()
+        if slug and slug not in tier:
+            repos.append(slug)
+            tier[slug] = 0
+    for idx, r in enumerate(tier1, start=1):
+        slug = r["repo"].strip()
+        if not slug or slug in tier:
+            continue
+        org = slug.split("/", 1)[0].lower()
+        if org in BIG_ORGS:
+            continue
+        repos.append(slug)
+        tier[slug] = 1
+        tier1_rank[slug] = idx  # rank from refresh-tier1.py's sorted state
+    return repos[:18], tier, tier1_rank  # cap per Repos.md §Discovery flow
+
+
 def get_claimable_issues():
+    """Per Repos.md convergence standard: enumerate issues only on the
+    converged Tier 0 + Tier 1 target set. NO global `gh search issues` flood.
+
+    Falls back to language-scoped global search ONLY if the converged set is
+    empty (e.g. tier0 yaml unseeded AND tier1 state file missing). The fallback
+    is announced loudly in the status receipt so an unseeded pipeline doesn't
+    silently mimic the old divergent behavior.
+    """
+    targets, tier_map, tier1_rank_map = _converged_target_repos()
+    # Pre-compute 'tests dir present?' once per converged repo (capped at 18)
+    # so tier_score can read it from issue["_tests_exist"] without re-fetching.
+    tests_present = {repo: _repo_has_tests(repo) for repo in targets} if targets else {}
     all_issues = []
     labels = ["good first issue", "help wanted", "bug"]
-    for lang in LANGUAGES:
-        for label in labels:
-            result = subprocess.run(
-                ["gh", "search", "issues",
-                 f"--label={label}",
-                 "--state=open", "--sort=updated",
-                 f"--language={lang}", "--limit=2",
-                 # +author so we can filter out bot-issued items pre-flight
-                 "--json=number,title,repository,labels,author"],
-                capture_output=True, text=True, timeout=30
-            )
-            if result.returncode != 0:
-                continue
-            try:
-                issues = json.loads(result.stdout) or []
-                all_issues.extend(issues)
-            except json.JSONDecodeError:
-                continue
+
+    if targets:
+        for repo in targets:
+            for label in labels:
+                result = subprocess.run(
+                    ["gh", "search", "issues",
+                     f"--repo={repo}",
+                     f"--label={label}",
+                     "--state=open", "--sort=updated",
+                     "--limit=5",
+                     "--json=number,title,repository,labels,author,body,updatedAt"],
+                    capture_output=True, text=True, timeout=30,
+                )
+                if result.returncode != 0:
+                    continue
+                try:
+                    issues = json.loads(result.stdout) or []
+                    for it in issues:
+                        slug = it.get("repository", {}).get("nameWithOwner", "")
+                        it["_tier"] = tier_map.get(slug)
+                        if slug in tier1_rank_map:
+                            it["_tier1_rank"] = tier1_rank_map[slug]
+                        it["_tests_exist"] = tests_present.get(slug, False)
+                    all_issues.extend(issues)
+                except json.JSONDecodeError:
+                    continue
+    else:
+        # Unseeded fallback: original divergent global search. Loudly tagged so
+        # the status receipt makes it obvious the convergence isn't active.
+        for lang in LANGUAGES:
+            for label in labels:
+                result = subprocess.run(
+                    ["gh", "search", "issues",
+                     f"--label={label}",
+                     "--state=open", "--sort=updated",
+                     f"--language={lang}", "--limit=2",
+                     "--json=number,title,repository,labels,author"],
+                    capture_output=True, text=True, timeout=30,
+                )
+                if result.returncode != 0:
+                    continue
+                try:
+                    issues = json.loads(result.stdout) or []
+                    for it in issues:
+                        it["_tier"] = None  # un-tiered, fallback path
+                    all_issues.extend(issues)
+                except json.JSONDecodeError:
+                    continue
 
     seen = set()
     deduped = []
@@ -104,6 +221,72 @@ def get_claimable_issues():
             seen.add(key)
             deduped.append(issue)
     return deduped
+
+
+def tier_score(issue: dict) -> int:
+    """Per Repos.md §Discovery flow: 8-weight ranking. Higher = better.
+
+    Weights (per Repos.md spec):
+      Tier 0 membership                  +100
+      Tier 1 rank ≤ 3                    +30   (full Tier 1 weight)
+      Tier 1 rank > 3                    +15   (half weight, still Tier 1)
+      good first issue label             +20
+      help wanted label                  +15
+      Tests already exist in repo        +10
+      Repo stars ≥ 1000                  +5
+      Issue updated in last 7 days       +5
+      Body length 200-2000 chars         +5
+
+    Some signals (_stars, _tests_exist) are populated during preflight; they
+    will be missing on the pre-preflight sort and contribute 0 then. The
+    main() pipeline re-sorts approved issues after preflight to apply them.
+    """
+    s = 0
+
+    # Tier membership
+    t = issue.get("_tier")
+    if t == 0:
+        s += 100
+    elif t == 1:
+        rank = issue.get("_tier1_rank")
+        if rank is not None and rank <= 3:
+            s += 30
+        else:
+            s += 15  # Tier 1 but not top-3 → half weight per Repos.md
+
+    # Label signals
+    labels = {l.get("name", "").lower() for l in issue.get("labels") or []}
+    if "good first issue" in labels:
+        s += 20
+    if "help wanted" in labels:
+        s += 15
+
+    # Tests-exist (populated in get_claimable_issues per converged repo)
+    if issue.get("_tests_exist"):
+        s += 10
+
+    # Repo stars ≥ 1000 (populated by preflight; missing pre-preflight)
+    stars = issue.get("_stars")
+    if isinstance(stars, int) and stars >= 1000:
+        s += 5
+
+    # Issue updated in last 7 days
+    updated_at = issue.get("updatedAt") or ""
+    if updated_at:
+        try:
+            from datetime import datetime, timezone, timedelta
+            ts = datetime.fromisoformat(updated_at.replace("Z", "+00:00"))
+            if (datetime.now(timezone.utc) - ts) <= timedelta(days=7):
+                s += 5
+        except (ValueError, TypeError):
+            pass
+
+    # Body length sweet spot
+    body = (issue.get("body") or "").strip()
+    if 200 <= len(body) <= 2000:
+        s += 5
+
+    return s
 
 
 def _is_bot_login(login: str) -> bool:
@@ -138,6 +321,25 @@ def _repo_stars(repo: str) -> int:
         return int(r.stdout.strip())
     except Exception:
         return -1
+
+
+def _repo_has_tests(repo: str) -> bool:
+    """Per Repos.md §Discovery flow tier_score weight 'Tests already exist (+10)'.
+    Cheap check: does the repo root contain a tests/test/spec dir?
+    False on any error so the weight is conservative (no false +10 from API failures).
+    """
+    try:
+        r = subprocess.run(
+            ["gh", "api", f"repos/{repo}/contents",
+             "--jq", "[.[] | select(.type==\"dir\") | .name]"],
+            capture_output=True, text=True, timeout=15,
+        )
+        if r.returncode != 0 or not r.stdout.strip():
+            return False
+        dirs = json.loads(r.stdout)
+        return any(d in dirs for d in ("tests", "test", "spec", "specs", "__tests__"))
+    except (subprocess.TimeoutExpired, json.JSONDecodeError, OSError, ValueError):
+        return False
 
 
 def _issue_scope_keywords(title: str, body: str) -> set[str]:
@@ -463,14 +665,49 @@ def main():
     os.makedirs(CONTRIB_ROOT, exist_ok=True)
     os.makedirs(PR_STAGE_ROOT, exist_ok=True)
 
+    # Repos.md §Reporting observability: capture tier sizes for every status receipt
+    # (so monitor frontend can audit "are we contributing where we said we would").
+    tier0_size = len(_load_tier0())
+    tier1_size = len(_load_tier1())
+
     raw_issues = get_claimable_issues()
+    candidates_pre_filter = len(raw_issues)
+
     if not raw_issues:
-        write_status("no-issues-found")
+        write_status("no-issues-found", extra={
+            "tier0_size": tier0_size,
+            "tier1_size": tier1_size,
+            "candidates_pre_filter": 0,
+            "candidates_post_filter": 0,
+        })
         print(json.dumps({"wakeAgent": False}))
         return
 
-    approved, rejected = preflight_filter(raw_issues[:12])
+    # Repos.md §Discovery flow: sort candidates by tier_score (Tier 0 first,
+    # then Tier 1 by rank, then label/tests/body/star bonuses) so the cap
+    # keeps the highest-value candidates rather than whatever happened to
+    # come back first from the per-repo gh search calls.
+    raw_issues.sort(key=tier_score, reverse=True)
+
+    # Per Repos.md §Discovery flow: cap [:20] (was [:12] — drift fixed 2026-04-27).
+    approved, rejected = preflight_filter(raw_issues[:20])
+    # Re-sort with full preflight info now attached (_stars + _policy populated).
+    approved.sort(key=tier_score, reverse=True)
     approved = approved[:5]
+
+    candidates_post_filter = len(approved)
+
+    # Observability bundle — merged into every write_status call below
+    obs_extra = {
+        "tier0_size": tier0_size,
+        "tier1_size": tier1_size,
+        "candidates_pre_filter": candidates_pre_filter,
+        "candidates_post_filter": candidates_post_filter,
+    }
+    if approved:
+        chosen = approved[0]
+        obs_extra["chosen_issue"] = f"{chosen['repository']['nameWithOwner']}#{chosen['number']}"
+        obs_extra["chosen_tier"] = chosen.get("_tier")
 
     if rejected:
         print("Preflight rejections:")
@@ -480,7 +717,7 @@ def main():
 
     if not approved:
         detail = f"{len(rejected)} rejected in preflight, 0 approved"
-        write_status("no-approved-issues", detail)
+        write_status("no-approved-issues", detail, extra=obs_extra)
         print(json.dumps({"wakeAgent": False}))
         return
 
