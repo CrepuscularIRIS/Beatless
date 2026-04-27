@@ -591,6 +591,12 @@ def main():
         print(json.dumps({"wakeAgent": False}))
         return
 
+    # Repos.md §Discovery flow: sort candidates by tier_score (Tier 0 first,
+    # then Tier 1, then label/body bonuses) so the cap of [:12] keeps the
+    # highest-value candidates rather than whatever happened to come back
+    # first from the per-repo gh search calls.
+    raw_issues.sort(key=tier_score, reverse=True)
+
     approved, rejected = preflight_filter(raw_issues[:12])
     approved = approved[:5]
 

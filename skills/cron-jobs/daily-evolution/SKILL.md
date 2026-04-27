@@ -23,7 +23,7 @@ STATE=/tmp/daily-evolution-state-$(date +%Y%m%d-%H%M%S).json
 {
   echo "{"
   echo "  \"ts\": \"$(date -Iseconds)\","
-  echo "  \"cron_jobs\": $(hermes cron list --json 2>/dev/null || echo '[]'),"
+  echo "  \"cron_jobs\": $(hermes cron list 2>/dev/null || echo '[]'),"
   echo "  \"errors_24h\": $(grep -c ERROR ~/.hermes/logs/errors.log 2>/dev/null || echo 0),"
   echo "  \"agent_log_tail\": $(tail -100 ~/.hermes/logs/agent.log | jq -Rs . 2>/dev/null || echo '\"\"')"
   echo "}"
@@ -39,10 +39,10 @@ Invoke all three in parallel via background jobs:
 # Pass B: Codex via codex-router skill
 # Pass C: Gemini via gemini-router skill
 
-call_skill codex-router "Audit the Hermes system. State at $STATE. Read ~/claw/Beatless/standards/Regulations.md for rules. Output findings + verdict per rule. RESULT: <pass|fail|flag> SCORE: <0-10>" &
+true  # AGENT-ACTION: delegate_task(skill="codex-router", args='"Audit the Hermes system. State at $STATE. Read ~/claw/Beatless/standards/Regulations.md for rules. Output findings + verdict per rule. RESULT: <pass|fail|flag> SCORE: <0-10>" &')
 PID_CODEX=$!
 
-call_skill gemini-router "Same audit task. Same state file. Independent verdict required. VERDICT: <pass|fail|flag>" &
+true  # AGENT-ACTION: delegate_task(skill="gemini-router", args='"Same audit task. Same state file. Independent verdict required. VERDICT: <pass|fail|flag>" &')
 PID_GEMINI=$!
 
 # Pass A runs in this Hermes session: read state, read regulations, write findings.
@@ -91,7 +91,7 @@ EOF
 cd ~/claw/blog && git add "$OUT" && git commit -m "audit(evolution): daily $(date +%Y-%m-%d)"
 
 # Memory: future cron ticks see this
-hermes memory write "daily-evolution $(date +%Y-%m-%d) committed:$SLUG findings_count:$N priority_actions:$ACTIONS"
+true  # AGENT-ACTION: record to memory tool: "daily-evolution $(date +%Y-%m-%d) committed:$SLUG findings_count:$N priority_actions:$ACTIONS"
 ```
 
 ## Constitutional anchor

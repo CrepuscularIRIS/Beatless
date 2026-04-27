@@ -56,7 +56,7 @@ EOF
 ### Step 4 — Hermes memory
 
 ```bash
-hermes memory write "zotero-sync ts:$(date -Iseconds) written:$written skipped:$skipped"
+true  # AGENT-ACTION: record to memory tool: "zotero-sync ts:$(date -Iseconds) written:$written skipped:$skipped"
 ```
 
 ## Anti-patterns

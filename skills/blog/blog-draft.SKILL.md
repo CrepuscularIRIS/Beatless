@@ -16,7 +16,7 @@ metadata:
 
 # Blog Drafting — New Bilingual Posts (T2)
 
-Drafts NEW posts (not translations) from curated source material. Output is **bilingual** — every post produces both `<slug>/` (English) and `<slug>-zh/` (Chinese) under `~/obsidian-vault/blog-drafts/`. Human reviews + commits.
+Drafts NEW posts (not translations) from curated source material. Output is **bilingual** — every post produces both `<slug>/` (English) and `<slug>-zh/` (Chinese) under `~/claw/blog/src/content/blogs/` with `draft:true`. Astro skips drafts in prod build until a human flips `draft:false`.
 
 ## Source material
 
@@ -62,12 +62,12 @@ Same content, both written from scratch (not translated). The agent writes them 
 
 ```bash
 SLUG_HINT="<author><year><word>"   # e.g. luo2025beyond
-hermes memory query "blog-draft $SLUG_HINT" 2>/dev/null | grep -q DONE && {
+true  # AGENT-ACTION: query memory tool for "blog-draft $SLUG_HINT 2>/dev/null | grep -q DONE && {"
   echo "SKIP: $SLUG_HINT already drafted"; exit 0
 }
 ```
 
-After successful write, log: `hermes memory write "blog-draft $SLUG DONE"`.
+After successful write, log: `true  # AGENT-ACTION: record to memory tool: "blog-draft $SLUG DONE`."
 
 ## Heterogeneous review (v2, before declaring done)
 
@@ -121,9 +121,9 @@ status: complete | draft | needs-update
 
 3. **Decide slug.** `<YYYY-MM-DD>-<topic>` or `<topic>` (evergreen).
 
-4. **Write English version** at `~/obsidian-vault/blog-drafts/<slug>/index.mdx`. Apply the five commandments. Use the section template literally (don't merge sections).
+4. **Write English version** at `~/claw/blog/src/content/blogs/<slug>/index.mdx`. Apply the five commandments. Use the section template literally (don't merge sections).
 
-5. **Write Chinese version** at `~/obsidian-vault/blog-drafts/<slug>-zh/index.mdx`. Same content, native Chinese (not translated). Apply the same five commandments. Banned phrases forbidden.
+5. **Write Chinese version** at `~/claw/blog/src/content/blogs/<slug>-zh/index.mdx`. Same content, native Chinese (not translated). Apply the same five commandments. Banned phrases forbidden.
 
 6. **Self-audit.** Run the checklist below. If anything fails, fix before declaring done.
 
@@ -145,7 +145,7 @@ For BOTH the en and zh files:
 
 ## NEVER
 
-- Never write directly to `~/claw/blog/src/content/blogs/`. Always to `~/obsidian-vault/blog-drafts/`.
+- Never write to deprecated `~/obsidian-vault/blog-drafts/`. Always to canonical `~/claw/blog/src/content/blogs/<slug>/index.mdx` with `draft:true` (Astro skips drafts in prod).
 - Never write English-only or Chinese-only — both are mandatory.
 - Never use Claude/Codex/Gemini in the writing path. Hermes-routed models only.
 - Never auto-commit. Human reviews → manual commit.
@@ -155,5 +155,5 @@ For BOTH the en and zh files:
 
 After drafting, output a one-line summary:
 ```
-Draft: <slug> (template=<signal|paper|milestone>, en=<wc> words, zh=<chars> 字)  →  ~/obsidian-vault/blog-drafts/
+Draft: <slug> (template=<signal|paper|milestone>, en=<wc> words, zh=<chars> 字)  →  ~/claw/blog/src/content/blogs/
 ```

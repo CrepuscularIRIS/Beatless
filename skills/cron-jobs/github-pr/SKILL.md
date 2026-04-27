@@ -71,14 +71,14 @@ Pick top 1-3 highest-scoring candidates per cron tick.
 
 For each chosen issue:
 ```
-call_skill claude-code-router task="Read issue $URL, design fix, implement, test, push, open PR" working_dir="$(temp clone)"
+true  # AGENT-ACTION: delegate_task(skill="claude-code-router", args='task="Read issue $URL, design fix, implement, test, push, open PR" working_dir="$(temp clone)"')
 ```
 
 ### Step 6 — three-pass review (P2 hard rule)
 
 After PR opened:
-- Pass 1 (correctness): `call_skill codex-router` to score code correctness 0-10
-- Pass 2 (architecture): `call_skill gemini-router` to score design 0-10
+- Pass 1 (correctness): `# Agent: delegate to skill `codex-router`` via your `delegate_task` tool. Args: to score code correctness 0-10
+- Pass 2 (architecture): `# Agent: delegate to skill `gemini-router`` via your `delegate_task` tool. Args: to score design 0-10
 - Pass 3 (adversarial): a fresh sonnet session (not the one that wrote it) red-teams 0-10
 
 Aggregate: mean. Threshold 6.0. Below → close PR with apology comment, mark `needs-human`.
@@ -101,7 +101,7 @@ cat > ~/.hermes/shared/.last-github-pr-status <<EOF
 }
 EOF
 
-hermes memory write "github-pr ts:$(date -Iseconds) result:$RESULT score:$SCORE pr:$PR_URL tier:$TIER"
+true  # AGENT-ACTION: record to memory tool: "github-pr ts:$(date -Iseconds) result:$RESULT score:$SCORE pr:$PR_URL tier:$TIER"
 ```
 
 ## Anti-patterns

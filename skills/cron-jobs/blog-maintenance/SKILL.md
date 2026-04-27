@@ -77,7 +77,7 @@ EOF
 ### Step 5 — Hermes memory + optional remediation
 
 ```bash
-hermes memory write "blog-maintenance ts:$(date -Iseconds) missing_zh:${#MISSING_ZH[@]} stale:${#STALE[@]}"
+true  # AGENT-ACTION: record to memory tool: "blog-maintenance ts:$(date -Iseconds) missing_zh:${#MISSING_ZH[@]} stale:${#STALE[@]}"
 
 # Optional: if missing_zh > threshold, can chain into blog-translate skill
 # (kept manual for now — skip auto-promote per Regulations).

@@ -47,19 +47,29 @@ extra_constraints:
 
 ### Step 4 — write status + memory
 
+The agent counts each outcome during Step 2 and assigns to the variables
+below before writing the status receipt. Defaults guarantee valid JSON
+even when an outcome category is empty.
+
 ```bash
+N=${N:-0}                # PRs the agent walked through
+FIXED=${FIXED:-0}        # PRs where the agent pushed a fix to the fork
+REPLIED=${REPLIED:-0}    # PRs where the agent only commented
+SKIPPED=${SKIPPED:-0}    # PRs with no new activity since last tick
+BLOCKED=${BLOCKED:-0}    # PRs needing a human (e.g. unclear review feedback)
+
 cat > ~/.hermes/shared/.last-github-response-status <<EOF
 {
   "ts": "$(date -Iseconds)",
-  "prs_checked": $N,
-  "prs_fixed": $FIXED,
-  "prs_replied": $REPLIED,
-  "prs_skipped": $SKIPPED,
-  "prs_blocked": $BLOCKED
+  "prs_checked": ${N},
+  "prs_fixed": ${FIXED},
+  "prs_replied": ${REPLIED},
+  "prs_skipped": ${SKIPPED},
+  "prs_blocked": ${BLOCKED}
 }
 EOF
 
-hermes memory write "github-response ts:$(date -Iseconds) checked:$N fixed:$FIXED"
+true  # AGENT-ACTION: record to memory tool: "github-response ts:$(date -Iseconds) checked:$N fixed:$FIXED"
 ```
 
 ## Anti-patterns

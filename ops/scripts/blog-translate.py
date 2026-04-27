@@ -93,8 +93,14 @@ def find_untranslated() -> list[Path]:
     for d in entries:
         if d.name.endswith("-zh"):
             continue
-        if (d.name + "-zh") in names:
-            continue
+        # Tighter guard: a -zh sibling counts as translated only if it has a
+        # non-empty index.mdx. Bare/empty -zh dirs (left over from a failed
+        # earlier tick) used to falsely block re-translation forever.
+        zh_sibling = BLOG_DIR / (d.name + "-zh")
+        if zh_sibling.is_dir():
+            zh_idx = zh_sibling / "index.mdx"
+            if zh_idx.is_file() and zh_idx.stat().st_size > 200:
+                continue
         idx = d / "index.mdx"
         if not idx.exists():
             continue
@@ -173,6 +179,15 @@ def translate_one(src_dir: Path, dry_run: bool = False) -> dict:
     stdout_tail = (result.stdout or "")[-1500:]
     success = out_path.exists() and out_path.stat().st_size > 200
     status = "ok" if success else ("agent-failed" if result.returncode == 0 else "exit-error")
+    # Cleanup pre-created empty dir on failure: leaving an empty <slug>-zh
+    # behind would falsely flag the post as translated on the next tick
+    # (codex audit P1, blog-translate.py:96 — dir-only-check trap).
+    if not success:
+        try:
+            if out_dir.is_dir() and not any(out_dir.iterdir()):
+                out_dir.rmdir()
+        except OSError:
+            pass
     return {
         "slug": slug,
         "status": status,

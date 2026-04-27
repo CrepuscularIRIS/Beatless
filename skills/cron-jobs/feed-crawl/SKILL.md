@@ -69,7 +69,7 @@ EOF
 ### Step 3 — Hermes memory
 
 ```bash
-hermes memory write "feed-crawl ts:$(date -Iseconds) feeds_polled:$N entries_written:$WRITTEN"
+true  # AGENT-ACTION: record to memory tool: "feed-crawl ts:$(date -Iseconds) feeds_polled:$N entries_written:$WRITTEN"
 ```
 
 ## Why feed != paper

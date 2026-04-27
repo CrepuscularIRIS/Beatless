@@ -39,7 +39,7 @@ The legacy `~/obsidian-vault/blog-drafts/` is **deprecated**; do not write there
 
 ```bash
 # Hermes-side: check memory for prior translation
-hermes memory query "blog-translate $SLUG" 2>/dev/null | grep -q DONE && {
+true  # AGENT-ACTION: query memory tool for "blog-translate $SLUG 2>/dev/null | grep -q DONE && {"
   echo "SKIP: $SLUG already translated (per Hermes memory)"
   exit 0
 }

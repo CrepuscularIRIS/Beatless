@@ -23,8 +23,8 @@ Replaces `~/.hermes/scripts/paper-harvest.py`. The script's logic (HTTP polling 
 ### Step 1 — Hermes memory check (per-source last-fetched markers)
 
 ```bash
-LAST_ARXIV=$(hermes memory query "paper-harvest arxiv last_id" 2>/dev/null | tail -1)
-LAST_OPENREVIEW=$(hermes memory query "paper-harvest openreview last_id" 2>/dev/null | tail -1)
+LAST_ARXIV=$(true  # AGENT-ACTION: query memory tool for "paper-harvest arxiv last_id 2>/dev/null | tail -1)"
+LAST_OPENREVIEW=$(true  # AGENT-ACTION: query memory tool for "paper-harvest openreview last_id 2>/dev/null | tail -1)"
 # ... per source
 ```
 
@@ -64,8 +64,8 @@ Title similarity at 0.85 catches the `luo2025beyond` ↔ `luo2025beyondb` case (
 push_to_zotero(fresh)
 
 # Update markers
-hermes memory write "paper-harvest arxiv last_id $latest_arxiv_id"
-hermes memory write "paper-harvest openreview last_id $latest_openreview_id"
+true  # AGENT-ACTION: record to memory tool: "paper-harvest arxiv last_id $latest_arxiv_id"
+true  # AGENT-ACTION: record to memory tool: "paper-harvest openreview last_id $latest_openreview_id"
 
 # Status receipt
 cat > ~/.hermes/shared/.last-paper-harvest-status <<EOF

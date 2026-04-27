@@ -17,25 +17,30 @@ When to use: tasks whose **input is huge** (entire codebase audit, full paper PD
 ## Inputs
 
 - `task` — prompt
-- `model` — defaults to `gemini-3.1-pro`; use `gemini-3-flash` for cheap research
+- `model` — leave unset to use Gemini CLI's own default. Explicit `gemini-3.1-pro` returns 404 from this account; the CLI auto-resolves to a working alias when `-m` is omitted.
 - `working_dir` — optional; if set, Gemini's tool calls run from there
 - `effort` — `low` / `medium` / `high`, defaults to `medium`
 - `timeout_seconds` — defaults to `1500`
 
 ## Invocation recipe
 
+The Gemini CLI has no `--effort` flag (verified `gemini --help` 0.39.1). Use `--approval-mode plan` to keep the run read-only when auditing, otherwise omit. Always `</dev/null` for cron-safety.
+
 ```bash
 TASK="${1:?task required}"
 WORKING_DIR="${2:-$PWD}"
-MODEL="${MODEL:-gemini-3.1-pro}"
-EFFORT="${EFFORT:-medium}"
 TIMEOUT="${TIMEOUT_SECONDS:-1500}"
+APPROVAL="${APPROVAL_MODE:-default}"   # default | auto_edit | yolo | plan
 
 cd "$WORKING_DIR" 2>/dev/null
 
-timeout "$TIMEOUT" gemini -p "$TASK" \
-  --model "$MODEL" \
-  --effort "$EFFORT" </dev/null
+# Default invocation: omit -m so Gemini CLI uses its own default.
+# Pass MODEL=<name> only if you have a model alias confirmed to work.
+GEMINI_M_ARG=""
+[ -n "${MODEL:-}" ] && GEMINI_M_ARG="--model $MODEL"
+
+timeout "$TIMEOUT" gemini -p "$TASK" $GEMINI_M_ARG \
+  --approval-mode "$APPROVAL" </dev/null
 ```
 
 ## Output contract

@@ -79,12 +79,28 @@ def find_uncovered_paper() -> Path | None:
     if not PAPERS_DIR.exists():
         return None
     existing_slugs: set[str] = set()
+    # Only count slugs whose <dir>/index.mdx exists with real content.
+    # Empty dirs from a failed earlier tick must NOT block fresh drafting
+    # (codex audit P1: blog-draft.py:87 — collision-prone prefix check).
     for d in (DRAFTS_DIR, BLOG_DIR):
-        if d.exists():
-            existing_slugs.update(x.name for x in d.iterdir() if x.is_dir())
+        if not d.exists():
+            continue
+        for x in d.iterdir():
+            if not x.is_dir():
+                continue
+            idx = x / "index.mdx"
+            if idx.is_file() and idx.stat().st_size > 200:
+                existing_slugs.add(x.name)
     for note in sorted(PAPERS_DIR.glob("@*.md"), key=lambda p: p.stat().st_mtime, reverse=True):
         cite = note.stem.lstrip("@")
-        if any(slug.startswith(cite[:20]) for slug in existing_slugs):
+        # Exact match (or trailing-letter collision-suffix as in luo2025beyondb).
+        # The old `slug.startswith(cite[:20])` collided across different papers
+        # by the same author/year (e.g. wang2026fracturegs vs wang2026quadratic).
+        if cite in existing_slugs:
+            continue
+        # Tolerate at most one trailing letter suffix added by prior collision-resolve.
+        if any(s == cite or (s.startswith(cite) and len(s) - len(cite) == 1 and s[-1].isalpha())
+               for s in existing_slugs):
             continue
         return note
     return None
@@ -109,7 +125,8 @@ def call_hermes(model_or_provider: str, prompt: str, timeout: int, max_turns: in
     Step is in config's model_aliases but NOT in the CLI's --provider allowlist,
     so we route via -m instead. MiniMax + Kimi are in the allowlist.
     """
-    cmd = ["hermes", "chat", "-Q", "--max-turns", str(max_turns)]
+    hermes_bin = os.environ.get("HERMES_BIN", "/home/lingxufeng/.local/bin/hermes")
+    cmd = [hermes_bin, "chat", "-Q", "--max-turns", str(max_turns)]
     if model_or_provider == "step":
         cmd += ["-m", "step"]   # uses config model_aliases.step
     else:
@@ -117,9 +134,11 @@ def call_hermes(model_or_provider: str, prompt: str, timeout: int, max_turns: in
     if skill:
         cmd += ["-s", skill]
     cmd += ["-q", prompt]
+    env = os.environ.copy()
+    env["PATH"] = os.pathsep.join([str(Path.home() / ".local" / "bin"), env.get("PATH", "")])
     try:
         r = subprocess.run(cmd, capture_output=True, text=True,
-                           timeout=timeout, cwd=str(Path.home()))
+                           timeout=timeout, cwd=str(Path.home()), env=env)
         return r.returncode, r.stdout or ""
     except subprocess.TimeoutExpired:
         return 124, ""
@@ -296,6 +315,16 @@ def draft_paper_pipelined(paper_path: Path, dry_run: bool = False) -> dict:
     else:
         status = "exit-error"
     print(f"{status} (en={en_p.stat().st_size if en_ok else 0}b, zh={zh_p.stat().st_size if zh_ok else 0}b)")
+
+    # Cleanup empty pre-created dirs on failure (codex audit P1: blog-draft.py:247).
+    # An empty <slug>/ on disk would block future picks via find_uncovered_paper's
+    # existing-slugs check, so we remove any empty dirs the failed write left behind.
+    for p in (en_p, zh_p):
+        try:
+            if not p.exists() and p.parent.is_dir() and not any(p.parent.iterdir()):
+                p.parent.rmdir()
+        except OSError:
+            pass
 
     return {
         "slug": slug,
