@@ -1,0 +1,27 @@
+# Tier 0 — Core 1-10 hand-curated contribution targets.
+#
+# Schema documented in Repos.md (§Tier 0). Enforced by github-pr.py via
+# load_tier0(). Cap: 10 active entries. Promotions/retirements MUST update
+# this file in the same commit as the rationale change.
+#
+# Initial seed left empty intentionally — populate after first sweep of
+# Tier 1 candidates so the manual picks reflect real signal, not guesses.
+
+active: []
+
+# Example entry shape (uncomment and edit when promoting from Tier 1):
+#
+# active:
+#   - repo: thecourseforum/theCourseForum2
+#     rationale: |
+#       We shipped PR #1254 (forgot-password Cognito flow) and the maintainer
+#       merged within 48h. Stack matches our Django expertise; small but
+#       responsive contributor base; clear contribution policy.
+#     languages: [python]
+#     contact_pattern: fast
+#     ai_policy: allowed
+#     notes: |
+#       No CLA. Follow CONTRIBUTING.md test-first conventions.
+
+archive: []
+# Same schema as active, plus retired_on: YYYY-MM-DD and reason: <one line>.
