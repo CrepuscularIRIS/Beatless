@@ -1,83 +1,135 @@
-# Beatless — Autonomous Agent Constellation
+<p align="center">
+  <img src="assets/hermes-constellation-banner.jpg" alt="Hermes Constellation — 5 hIE GitHub Agent" width="100%" />
+</p>
 
-Hybrid AI orchestration system for open-source contribution, technical blogging, and ML research. Hermes Agent handles scheduling and information gathering; Claude Code handles deep execution.
+<h1 align="center">Beatless — Hermes Constellation</h1>
 
-## Current State: Constellation v3
+<p align="center">
+  <em>CODE · COLLABORATE · CREATE</em>
+</p>
 
-```
-Hermes Agent (Kimi K2.6 orchestrator)
-  ├── Cron: 4 active jobs
-  │     ├── GitHub Response    — hourly PR comment triage
-  │     ├── GitHub PR Pipeline — hourly issue discovery → full PR submission
-  │     ├── Auto Research      — 4h experiment analysis cycles
-  │     └── Blog Maintenance   — 12h content audit + writing (MiniMax M2.7)
-  │
-  ├── Models
-  │     ├── Kimi K2.6      — orchestration, planning, review
-  │     ├── Step 3.5 Flash — fast execution, tool chains, web search
-  │     └── MiniMax M2.7   — writing, image gen, TTS, video, documents
-  │
-  └── Wake-gate scripts → Claude Code (on-demand)
-        ├── /github-pr       — 12-phase PR pipeline with triple review
-        ├── /pr-followup     — maintainer comment response
-        └── /exp-*           — ML experiment lifecycle (see below)
-```
+<p align="center">
+  <img src="https://img.shields.io/badge/Status-Production-success" />
+  <img src="https://img.shields.io/badge/Cron%20Jobs-14%20active-blue" />
+  <img src="https://img.shields.io/badge/Engines-6%20models-blueviolet" />
+  <img src="https://img.shields.io/badge/PR%20Acceptance-41.5%25-green" />
+  <img src="https://img.shields.io/badge/Owner-CrepuscularIRIS-181717?logo=github" />
+</p>
 
-## Experiment Command Pack (exp-*)
+---
 
-Five commands encoding a two-path research methodology for ML experiments:
+> *"AI is not a tool — it is a mirror." — Beatless*
 
-| Command | Purpose |
-|---------|---------|
-| `/exp-status` | Workspace readiness diagnostic (GPU, data, plugins) |
-| `/exp-init` | Initialize experiment branch, planning files, baseline run |
-| `/exp-discover` | Generate hypotheses via idea-first or application-first path |
-| `/exp-run` | Autonomous experiment loop (quick: single-GPU / full: dual-GPU A/B) |
-| `/exp-review` | Multi-agent review with continue/pivot/rollback/halt verdict |
+**Beatless** is the standards & control repository for an autonomous research-and-engineering OS,
+themed after the 2018 anime *Beatless* and built on top of [Hermes Agent](https://github.com/nousresearch/hermes-agent).
+Five hIE (humanoid Interface Element) personas drive five categories of cron-scheduled work,
+from PR pipeline submission to paper-friction extraction to blog drafting — all autonomous,
+all with kill-switches.
 
-Integrates: Codex (code edits), Gemini (literature + direction review), Superpowers (brainstorming), GSD (verification), Planning-with-files (state persistence).
+---
 
-## PR Pipeline
+## ✦ The Five hIE — character ↔ cron mapping
 
-12-phase process from issue discovery to PR submission:
+<div align="center">
 
-1. Discover claimable issues (good first issue, help wanted, bug)
-2. Evaluate repo (CONTRIBUTING.md, recent PRs, test infrastructure)
-3. Fork, clone, baseline tests
-4. Implement fix (Codex write-mode)
-5. Triple review (Gemini correctness + Codex architecture + Claude quality gate)
-6. Submit PR with evidence-based scoring
+| hIE | Visual | Role in Hermes | What it ships |
+|:---:|:---|:---:|:---|
+| 🌸 **Snowdrop** | green-haired, holographic book | `paper-spotlight` | Deep reads of breakthrough papers; paradigm-friction extraction (Kimi K2.6) |
+| ⚡ **Kouka** | red-haired, glowing red orb | `signal` | Time-sensitive news, model launches, product announcements |
+| 📜 **Lacia** | silver-haired, central, blue contract orb | `bundle` | Cross-topic digests, weekly summaries, the orchestrator's voice |
+| 🔧 **Methode** | blonde tactical, holographic shield | `engineering` | Tooling, framework dives, infrastructure deep-reads |
+| 🛡️ **Saturnus** | maid silhouette, audit tablet | `audit` | System audits, regulation compliance, daily-evolution reports |
 
-Quality controls: anti-inflation (no self-review), revert-test-reapply verification, minimum 7.5/10 score gate.
+</div>
 
-## Repository Structure
+---
+
+## ✦ Architecture (Constellation v3+)
 
 ```
-commands/exp/           # Active: exp-* command pack (903 lines)
-design/                 # Architecture: CONSTELLATION v1 → v3 evolution
-standards/              # PR guidelines, contribution protocols
-pipelines/              # Active pipeline specs (github-pr.md, blog-maintenance.md)
-docs/                   # HERMES integration, migration status
-agents/aoi/             # Aoi — scheduler persona (SOUL.md)
-archive/                # Deprecated v2 infrastructure
-  ├── v2-deprecated/    #   Heartbeat agents, shell runners, harness scripts
-  └── deprecated-commands/  #   research-analyze.md, research-train-loop.md
+                    ┌─────────────────────────────────────┐
+                    │   Hermes Agent (Kimi K2.6 brain)    │
+                    │   14 cron jobs · 6-engine routing   │
+                    └─────────────────────────────────────┘
+                                     │
+        ┌────────────────────────────┼────────────────────────────┐
+        ↓                            ↓                            ↓
+   ┌─────────┐                 ┌──────────┐                 ┌──────────┐
+   │  hIE    │                 │ Standards│                 │  Outputs │
+   │ Cron    │                 │ (this    │                 │          │
+   │ Jobs    │                 │  repo)   │                 │          │
+   ├─────────┤                 ├──────────┤                 ├──────────┤
+   │Snowdrop │ ← paper-extract │Repos.md  │ ← which repos   │Blog posts│
+   │Kouka    │ ← signal        │Regulat.. │ ← red lines     │PRs       │
+   │Lacia    │ ← bundle        │Skills/   │ ← agent specs   │Audits    │
+   │Methode  │ ← engineering   │Pipelines/│ ← workflows     │Friction  │
+   │Saturnus │ ← audit         │Commands/ │ ← slash cmds    │  yamls   │
+   └─────────┘                 └──────────┘                 └──────────┘
 ```
 
-## Planned (Next Stages)
+---
 
-- **Aoi** — Digital persona on [OpenRoom](https://github.com/MiniMax-AI/OpenRoom) platform. Currently scheduler-only; planned evolution into embodied agent with visual presence.
-- **OpenRoom Integration** — MiniMax-powered desktop environment for Aoi. Workspace, apps, real-time interaction.
-- **Beatless Framework Rewrite** — Current repo serves as architecture documentation and archive. Future rewrite planned to consolidate the Hermes + ClaudeCode hybrid pattern into a clean framework.
+## ✦ 6-Engine Roster (heterogeneous-by-design)
 
-## Requirements
+| Engine | Role | Strength | Where used |
+|:---|:---|:---|:---|
+| **Sonnet 4.6** | Mainhand orchestrator | Speed + reasoning | Most cron prompts |
+| **Opus 4.7** | Idea + regulation generator | Depth | Decompose / plan writing |
+| **Codex GPT-5.4** | Code review, faithfulness | Surgical edits | Devil's Advocate, novelty audit |
+| **Codex GPT-5.3** | Debug rescue | Recovery | After 2 failed Sonnet rounds |
+| **Gemini 3 Pro** | Wide-context research | Breadth | Decompose first-principles |
+| **Kimi K2.6** | Tool-calling, friction extract | Cost-efficient | Friction Extract cron |
+| **MiniMax M2.7** | Writing, translation | Style | Blog Translate (with Codex+Gemini review chain) |
 
-- [Hermes Agent](https://github.com/NousResearch/hermes-agent) v0.10.0+ (gateway + cron)
-- Claude Code CLI (`claude`) with Opus/Sonnet
-- GitHub CLI (`gh`, authenticated)
-- Codex and Gemini available as Claude Code plugins
-- `uv` for Python, `pnpm` for JS/TS
+**Heterogeneity rule** (Regulation §R2): writer ≠ reviewer. Never let the same model family
+write and audit the same artifact.
 
-## License
+---
 
-MIT
+## ✦ Live numbers (last 7 days)
+
+<div align="center">
+
+| Metric | Value |
+|:---:|:---:|
+| Open-source PRs created | **34** |
+| Merged | **10** |
+| Acceptance rate (finalized) | **41.5%** |
+| Repos touched | **53** across Python · Rust · Go · TS |
+| Blog posts auto-drafted | bilingual EN/ZH with Codex faithfulness + Gemini fluency review |
+| Friction yamls produced | Kimi K2.6, 1 paper / 10 min · 144 papers/day cap |
+
+</div>
+
+---
+
+## ✦ Repository layout
+
+```
+Beatless/
+├── standards/      ← Repos.md · Regulations.md · Skills.md (canonical rules)
+├── skills/         ← per-cron skill specs (blog-translate, github-pr, friction-extract, …)
+├── pipelines/      ← multi-step workflows (research-loop, blog-pipeline)
+├── commands/       ← Claude Code slash commands (/research-* family)
+├── agents/         ← agent definitions
+├── plan/           ← planning docs (rule-library-architecture, blog-taxonomy-hIE, …)
+├── docs/           ← cross-cutting documentation
+└── ops/            ← operational runbooks
+```
+
+---
+
+## ✦ Reading order (if you want to grok this system)
+
+1. `standards/Regulations.md` — three core principles (red lines)
+2. `standards/Repos.md` — convergence flow for repo selection
+3. `plan/blog-taxonomy-hIE.md` — what each hIE means + image conventions
+4. `skills/cron-jobs/` — concrete examples of how a single cron tick works
+5. The [Profile README](https://github.com/CrepuscularIRIS) — the human-facing summary
+
+---
+
+<p align="center">
+  <sub>An autonomous constellation. A maid (Saturnus) at the audit desk. A pact (Lacia) at the center.<br/>
+  Five characters from a 2018 anime, doing real engineering — every hour, every commit.</sub>
+</p>
